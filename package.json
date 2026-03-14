@@ -1,0 +1,45 @@
+{
+  "name": "find-my-stuff",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "@babel/runtime": "^7.28.6",
+    "@expo/metro-runtime": "~55.0.6",
+    "@expo/vector-icons": "^15.0.2",
+    "@react-navigation/bottom-tabs": "^7.15.5",
+    "@react-navigation/native": "^7.1.33",
+    "@react-navigation/stack": "^7.8.4",
+    "date-fns": "^4.1.0",
+    "expo": "^55.0.0",
+    "expo-camera": "~55.0.9",
+    "expo-document-picker": "~55.0.8",
+    "expo-file-system": "~55.0.10",
+    "expo-haptics": "~55.0.8",
+    "expo-image": "~55.0.6",
+    "expo-image-picker": "~55.0.12",
+    "expo-sharing": "~55.0.11",
+    "expo-sqlite": "~55.0.10",
+    "expo-status-bar": "~55.0.4",
+    "idb": "^8.0.3",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-native": "0.83.2",
+    "react-native-safe-area-context": "~5.6.2",
+    "react-native-screens": "~4.23.0",
+    "react-native-web": "^0.21.0",
+    "uuid": "^13.0.0",
+    "zustand": "^5.0.11"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.10",
+    "babel-preset-expo": "~55.0.8",
+    "typescript": "~5.9.2"
+  },
+  "private": true
+}

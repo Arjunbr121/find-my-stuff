@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "Find My Stuff",
+    "slug": "find-my-stuff",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#4ECDC4"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.findmystuff.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app needs access to your camera to take photos of items you want to track.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to select photos of items you want to track.",
+        "NSPhotoLibraryAddUsageDescription": "This app needs permission to save photos to your photo library."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#4ECDC4",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.findmystuff.app",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Find My Stuff to access your camera to take photos of items."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Find My Stuff to access your photos to select images of items."
+        }
+      ],
+      "expo-image",
+      "expo-sharing"
+    ]
+  }
+}
