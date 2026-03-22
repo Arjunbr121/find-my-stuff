@@ -52,8 +52,7 @@
           "photosPermission": "Allow Find My Stuff to access your photos to select images of items."
         }
       ],
-      "expo-image",
-      "expo-sharing"
+      "expo-secure-store"
     ]
   }
 }

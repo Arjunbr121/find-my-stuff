@@ -20,7 +20,7 @@ export interface RoomCardProps {
  * Icon mapping for room types
  * Using emoji icons for simplicity (can be replaced with icon library)
  */
-const ICON_MAP: Record<string, string> = {
+export const ICON_MAP: Record<string, string> = {
     kitchen: '🍳',
     bedroom: '🛏️',
     'living-room': '🛋️',

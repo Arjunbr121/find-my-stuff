@@ -7,6 +7,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import 'react-native-get-random-values';
 
 // Storage and repositories
 import { initializeStorage, IStorage } from './src/storage';
@@ -152,8 +154,10 @@ export default function App() {
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
-        <Navigation />
-        <StatusBar style="auto" />
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
+                <Navigation />
+                <StatusBar style="auto" />
+            </SafeAreaView>
       </SafeAreaProvider>
     </ErrorBoundary>
   );

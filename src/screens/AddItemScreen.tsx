@@ -1,487 +1,537 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-    View,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    StyleSheet,
-    ScrollView,
-    Image,
-    Alert,
-    ActivityIndicator,
-    Platform,
+    View, Text, TextInput, TouchableOpacity, StyleSheet,
+    ScrollView, Image, Alert, ActivityIndicator, Platform,
+    Animated, SafeAreaView, StatusBar,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera } from 'expo-camera';
 import type { AddItemScreenNavigationProp } from '../types/navigation';
 import { useItemStore, useRoomStore } from '../stores';
 import { ensureCameraPermission, ensureMediaLibraryPermission } from '../utils/permissions';
+import type { Category } from './ManageCategoriesScreen';
 
-/**
- * AddItemScreen - Form screen for adding new items
- * 
- * Features:
- * - Text input for item name
- * - Room picker dropdown
- * - Text input for specific location
- * - Camera button to take photo
- * - Image picker button to select from library
- * - Image preview
- * - Form validation with error messages
- * - Save button with loading state
- * - Camera permission handling
- */
+// ─── Tokens ───────────────────────────────────────────────────────────────────
+const BLUE     = '#007AFF';
+const TEAL     = '#4ECDC4';
+const ERROR    = '#FF3B30';
+const BG       = '#F5F6FA';
+const CARD     = '#FFFFFF';
+const BORDER   = '#E8E8EE';
+const TEXT_PRI = '#1A1A2E';
+const TEXT_SEC = '#6B7280';
+const TEXT_HNT = '#B0B7C3';
+
+// ─── Default categories ───────────────────────────────────────────────────────
+const DEFAULT_CATEGORIES: Category[] = [
+    { id: 'electronics', name: 'Electronics', icon: '💻', color: '#007AFF' },
+    { id: 'clothing',    name: 'Clothing',    icon: '👕', color: '#FF9500' },
+    { id: 'tools',       name: 'Tools',       icon: '🔧', color: '#636366' },
+    { id: 'documents',   name: 'Documents',   icon: '📄', color: '#34C759' },
+    { id: 'furniture',   name: 'Furniture',   icon: '🪑', color: '#AF52DE' },
+    { id: 'kitchen',     name: 'Kitchen',     icon: '🍳', color: '#FF6B9D' },
+    { id: 'sports',      name: 'Sports',      icon: '⚽', color: '#FF3B30' },
+    { id: 'books',       name: 'Books',       icon: '📚', color: '#5856D6' },
+];
+
+// ─── Reusable inline dropdown ─────────────────────────────────────────────────
+interface DropdownOption { id: string; label: string; sublabel?: string; color: string; icon?: string; }
+
+const InlineDropdown: React.FC<{
+    options: DropdownOption[];
+    selectedId: string;
+    onSelect: (id: string) => void;
+    placeholder: string;
+    accentColor?: string;
+    hasError?: boolean;
+    zIndex?: number;
+}> = ({ options, selectedId, onSelect, placeholder, accentColor = BLUE, hasError, zIndex = 100 }) => {
+    const [open, setOpen] = useState(false);
+    const rot = useRef(new Animated.Value(0)).current;
+    const selected = options.find(o => o.id === selectedId);
+
+    const toggle = () => {
+        Animated.spring(rot, { toValue: open ? 0 : 1, useNativeDriver: true, tension: 120, friction: 8 }).start();
+        setOpen(o => !o);
+    };
+    const pick = (id: string) => {
+        onSelect(id === selectedId ? '' : id);
+        Animated.spring(rot, { toValue: 0, useNativeDriver: true, tension: 120, friction: 8 }).start();
+        setOpen(false);
+    };
+    const chevron = rot.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
+
+    return (
+        <View style={[ddS.wrapper, { zIndex }]}>
+            <TouchableOpacity
+                style={[ddS.trigger, open && { borderColor: accentColor, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, borderBottomWidth: 0 }, hasError && { borderColor: ERROR }]}
+                onPress={toggle} activeOpacity={0.8}
+            >
+                {selected ? (
+                    <View style={ddS.selectedRow}>
+                        {selected.icon ? (
+                            <View style={[ddS.iconPill, { backgroundColor: selected.color + '20' }]}>
+                                <Text style={ddS.iconEmoji}>{selected.icon}</Text>
+                            </View>
+                        ) : (
+                            <View style={[ddS.colorDot, { backgroundColor: selected.color }]} />
+                        )}
+                        <Text style={ddS.selectedText}>{selected.label}</Text>
+                    </View>
+                ) : (
+                    <Text style={ddS.placeholder}>{placeholder}</Text>
+                )}
+                <Animated.Text style={[ddS.chevron, { transform: [{ rotate: chevron }] }]}>▾</Animated.Text>
+            </TouchableOpacity>
+
+            {open && (
+                <View style={[ddS.list, { borderColor: accentColor }]}>
+                    {options.map((opt, idx) => (
+                        <TouchableOpacity
+                            key={opt.id}
+                            style={[ddS.option, idx < options.length - 1 && ddS.optionBorder, opt.id === selectedId && { backgroundColor: accentColor + '0C' }]}
+                            onPress={() => pick(opt.id)} activeOpacity={0.7}
+                        >
+                            {opt.icon ? (
+                                <View style={[ddS.iconPill, { backgroundColor: opt.color + '20' }]}>
+                                    <Text style={ddS.iconEmoji}>{opt.icon}</Text>
+                                </View>
+                            ) : (
+                                <View style={[ddS.colorDot, { backgroundColor: opt.color }]} />
+                            )}
+                            <View style={ddS.optionContent}>
+                                <Text style={[ddS.optionText, opt.id === selectedId && { color: opt.color, fontWeight: '600' }]}>
+                                    {opt.label}
+                                </Text>
+                                {opt.sublabel ? <Text style={ddS.optionSub}>{opt.sublabel}</Text> : null}
+                            </View>
+                            {opt.id === selectedId && <Text style={[ddS.check, { color: opt.color }]}>✓</Text>}
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            )}
+        </View>
+    );
+};
+
+const ddS = StyleSheet.create({
+    wrapper:      { },
+    trigger:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: CARD, borderWidth: 1.5, borderColor: BORDER, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14 },
+    selectedRow:  { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    colorDot:     { width: 10, height: 10, borderRadius: 5 },
+    iconPill:     { width: 30, height: 30, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+    iconEmoji:    { fontSize: 15 },
+    selectedText: { fontSize: 15, color: TEXT_PRI, fontWeight: '500' },
+    placeholder:  { fontSize: 15, color: TEXT_HNT },
+    chevron:      { fontSize: 16, color: TEXT_SEC },
+    list:         { backgroundColor: CARD, borderWidth: 1.5, borderTopWidth: 0, borderBottomLeftRadius: 12, borderBottomRightRadius: 12, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 4 },
+    option:       { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, gap: 10 },
+    optionBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER },
+    optionContent:{ flex: 1 },
+    optionText:   { fontSize: 15, color: TEXT_PRI },
+    optionSub:    { fontSize: 11, color: TEXT_HNT, marginTop: 1 },
+    check:        { fontSize: 14, fontWeight: '700' },
+});
+
+// ─── Field label ──────────────────────────────────────────────────────────────
+const FieldLabel: React.FC<{ label: string; optional?: boolean }> = ({ label, optional }) => (
+    <View style={fieldS.row}>
+        <Text style={fieldS.label}>{label}</Text>
+        {optional && (
+            <View style={fieldS.badge}>
+                <Text style={fieldS.badgeText}>OPTIONAL</Text>
+            </View>
+        )}
+    </View>
+);
+const fieldS = StyleSheet.create({
+    row:       { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+    label:     { fontSize: 11, fontWeight: '700', color: TEXT_SEC, letterSpacing: 0.8, textTransform: 'uppercase' },
+    badge:     { backgroundColor: BG, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: BORDER },
+    badgeText: { fontSize: 9, fontWeight: '700', color: TEXT_HNT, letterSpacing: 0.5 },
+});
+
+// ─── Step indicator ───────────────────────────────────────────────────────────
+const STEPS = ['Details', 'Location', 'Photo'];
+const StepIndicator: React.FC<{ current: number }> = ({ current }) => (
+    <View style={stepS.row}>
+        {STEPS.map((s, i) => (
+            <React.Fragment key={s}>
+                <View style={stepS.stepWrap}>
+                    <View style={[stepS.dot, i < current && stepS.dotDone, i === current && stepS.dotActive]}>
+                        {i < current
+                            ? <Text style={stepS.dotCheckText}>✓</Text>
+                            : <Text style={[stepS.dotNum, i === current && stepS.dotNumActive]}>{i + 1}</Text>
+                        }
+                    </View>
+                    <Text style={[stepS.label, i === current && stepS.labelActive]}>{s}</Text>
+                </View>
+                {i < STEPS.length - 1 && (
+                    <View style={[stepS.line, i < current && stepS.lineDone]} />
+                )}
+            </React.Fragment>
+        ))}
+    </View>
+);
+const stepS = StyleSheet.create({
+    row:          { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, backgroundColor: CARD, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER },
+    stepWrap:     { alignItems: 'center', gap: 4 },
+    dot:          { width: 28, height: 28, borderRadius: 14, backgroundColor: BG, borderWidth: 2, borderColor: BORDER, justifyContent: 'center', alignItems: 'center' },
+    dotActive:    { borderColor: BLUE, backgroundColor: BLUE + '12' },
+    dotDone:      { borderColor: BLUE, backgroundColor: BLUE },
+    dotNum:       { fontSize: 12, fontWeight: '700', color: TEXT_HNT },
+    dotNumActive: { color: BLUE },
+    dotCheckText: { fontSize: 12, color: '#fff', fontWeight: '700' },
+    label:        { fontSize: 10, fontWeight: '600', color: TEXT_HNT },
+    labelActive:  { color: BLUE },
+    line:         { flex: 1, height: 2, backgroundColor: BORDER, marginBottom: 14, marginHorizontal: 4 },
+    lineDone:     { backgroundColor: BLUE },
+});
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function AddItemScreen() {
     const navigation = useNavigation<AddItemScreenNavigationProp>();
 
-    // Form state
-    const [name, setName] = useState('');
-    const [roomId, setRoomId] = useState('');
+    const [name,             setName]             = useState('');
+    const [roomId,           setRoomId]           = useState('');
+    const [categoryId,       setCategoryId]       = useState('');
     const [specificLocation, setSpecificLocation] = useState('');
-    const [imageUri, setImageUri] = useState('');
-    const [saving, setSaving] = useState(false);
-
-    // Validation errors
-    const [errors, setErrors] = useState<{
-        name?: string;
-        roomId?: string;
-        specificLocation?: string;
-        imageUri?: string;
-    }>({});
+    const [imageUri,         setImageUri]         = useState('');
+    const [saving,           setSaving]           = useState(false);
+    const [touched,          setTouched]          = useState<Record<string, boolean>>({});
+    const [errors,           setErrors]           = useState<Record<string, string>>({});
 
     const itemStore = useItemStore();
     const roomStore = useRoomStore();
 
-    // Load rooms on mount
-    useEffect(() => {
-        roomStore.loadRooms();
-    }, []);
+    useEffect(() => { roomStore.loadRooms(); }, []);
 
-    // Validate form
+    // Current step (0 = Details, 1 = Location, 2 = Photo)
+    const currentStep = !name.trim() || !roomId ? 0 : !specificLocation.trim() ? 1 : 2;
+
     const validateForm = (): boolean => {
-        const newErrors: typeof errors = {};
-
-        if (!name.trim()) {
-            newErrors.name = 'Item name is required';
-        } else if (name.trim().length > 100) {
-            newErrors.name = 'Item name must be 100 characters or less';
-        }
-
-        if (!roomId) {
-            newErrors.roomId = 'Please select a room';
-        }
-
-        if (!specificLocation.trim()) {
-            newErrors.specificLocation = 'Specific location is required';
-        } else if (specificLocation.trim().length > 200) {
-            newErrors.specificLocation = 'Location must be 200 characters or less';
-        }
-
-        if (!imageUri) {
-            newErrors.imageUri = 'Please add a photo';
-        }
-
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
+        const e: Record<string, string> = {};
+        if (!name.trim())             e.name             = 'Item name is required';
+        else if (name.trim().length > 100) e.name        = 'Max 100 characters';
+        if (!roomId)                  e.roomId           = 'Please select a room';
+        if (!specificLocation.trim()) e.specificLocation = 'Specific location is required';
+        if (!imageUri)                e.imageUri         = 'Please add a photo';
+        setErrors(e);
+        return Object.keys(e).length === 0;
     };
 
-    // Handle camera button press
     const handleTakePhoto = async () => {
-        // Request camera permission with fallback to image picker
-        const hasPermission = await ensureCameraPermission(handlePickImage);
-
-        if (!hasPermission) {
-            return;
-        }
-
+        const ok = await ensureCameraPermission(handlePickImage);
+        if (!ok) return;
         try {
-            // Launch camera
-            const result = await ImagePicker.launchCameraAsync({
-                mediaTypes: ['images'],
-                allowsEditing: true,
-                aspect: [1, 1],
-                quality: 0.8,
-            });
-
-            if (!result.canceled && result.assets && result.assets.length > 0) {
-                setImageUri(result.assets[0].uri);
-                // Clear image error if it was set
-                if (errors.imageUri) {
-                    setErrors({ ...errors, imageUri: undefined });
-                }
-            }
-        } catch (error) {
-            console.error('Error taking photo:', error);
-            Alert.alert(
-                'Camera Error',
-                'Failed to take photo. Please try again or use the photo library.',
-                [{ text: 'OK' }]
-            );
-        }
+            const r = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+            if (!r.canceled && r.assets?.length) { setImageUri(r.assets[0].uri); setErrors(e => ({ ...e, imageUri: '' })); }
+        } catch { Alert.alert('Camera Error', 'Failed to take photo. Please try again.'); }
     };
 
-    // Handle image picker button press
     const handlePickImage = async () => {
-        // Request media library permission
-        const hasPermission = await ensureMediaLibraryPermission();
-
-        if (!hasPermission) {
-            return;
-        }
-
+        const ok = await ensureMediaLibraryPermission();
+        if (!ok) return;
         try {
-            // Launch image picker
-            const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ['images'],
-                allowsEditing: true,
-                aspect: [1, 1],
-                quality: 0.8,
-            });
-
-            if (!result.canceled && result.assets && result.assets.length > 0) {
-                setImageUri(result.assets[0].uri);
-                // Clear image error if it was set
-                if (errors.imageUri) {
-                    setErrors({ ...errors, imageUri: undefined });
-                }
-            }
-        } catch (error) {
-            console.error('Error picking image:', error);
-            Alert.alert(
-                'Image Picker Error',
-                'Failed to select photo. Please try again.',
-                [{ text: 'OK' }]
-            );
-        }
+            const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+            if (!r.canceled && r.assets?.length) { setImageUri(r.assets[0].uri); setErrors(e => ({ ...e, imageUri: '' })); }
+        } catch { Alert.alert('Image Picker Error', 'Failed to select photo.'); }
     };
 
-    // Handle save button press
     const handleSave = async () => {
-        if (!validateForm()) {
-            return;
-        }
-
+        setTouched({ name: true, roomId: true, specificLocation: true, imageUri: true });
+        if (!validateForm()) return;
         setSaving(true);
         try {
             await itemStore.addItem({
-                name: name.trim(),
-                roomId,
-                specificLocation: specificLocation.trim(),
-                imageUri,
-            });
-
-            // Navigate back on success
+                name: name.trim(), roomId,
+                categoryId: categoryId || undefined,
+                specificLocation: specificLocation.trim(), imageUri,
+            } as any);
             navigation.goBack();
-        } catch (error: any) {
-            Alert.alert(
-                'Error',
-                error.message || 'Failed to save item. Please try again.',
-                [{ text: 'OK' }]
-            );
-        } finally {
-            setSaving(false);
-        }
+        } catch (err: any) {
+            Alert.alert('Error', err.message || 'Failed to save item.');
+        } finally { setSaving(false); }
     };
 
-    // Handle cancel button press
-    const handleCancel = () => {
-        navigation.goBack();
-    };
+    // Room options for dropdown
+    const roomOptions: DropdownOption[] = roomStore.rooms.map(r => ({
+        id: r.id, label: r.name, color: r.color,
+    }));
+
+    // Category options for dropdown
+    const catOptions: DropdownOption[] = DEFAULT_CATEGORIES.map(c => ({
+        id: c.id, label: c.name, color: c.color, icon: c.icon,
+    }));
+
+    const isFormComplete = name.trim() && roomId && specificLocation.trim() && imageUri;
 
     return (
-        <View style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+            <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+
+            {/* ── Header ── */}
+            <View style={styles.header}>
+                <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+                    <Text style={styles.backArrow}>←</Text>
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Add New Item</Text>
+                <View style={{ width: 34 }} />
+            </View>
+
+            {/* ── Step indicator ── */}
+            <StepIndicator current={currentStep} />
+
             <ScrollView
-                style={styles.scrollView}
+                style={styles.scroll}
                 contentContainerStyle={styles.scrollContent}
                 keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
             >
-                {/* Item Name Input */}
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Item Name *</Text>
-                    <TextInput
-                        style={[styles.input, errors.name && styles.inputError]}
-                        value={name}
-                        onChangeText={setName}
-                        placeholder="e.g., Winter Jacket"
-                        placeholderTextColor="#999"
-                        maxLength={100}
-                    />
-                    {errors.name && (
-                        <Text style={styles.errorText}>{errors.name}</Text>
-                    )}
+                {/* ── Hero ── */}
+                <View style={styles.hero}>
+                    <Text style={styles.heroTitle}>Item Details</Text>
+                    <Text style={styles.heroSubtitle}>Where exactly did you tuck it away?</Text>
                 </View>
 
-                {/* Room Picker */}
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Room *</Text>
-                    <View style={styles.pickerContainer}>
-                        <ScrollView
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            contentContainerStyle={styles.roomList}
-                        >
-                            {roomStore.rooms.map((room) => (
-                                <TouchableOpacity
-                                    key={room.id}
-                                    style={[
-                                        styles.roomOption,
-                                        roomId === room.id && styles.roomOptionSelected,
-                                        { borderColor: room.color },
-                                    ]}
-                                    onPress={() => setRoomId(room.id)}
-                                >
-                                    <Text style={styles.roomOptionText}>
-                                        {room.name}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </ScrollView>
+                {/* ── Card: Name + Room + Category ── */}
+                <View style={styles.formCard}>
+                    {/* Name */}
+                    <View style={styles.fieldGroup}>
+                        <FieldLabel label="Item Name" />
+                        <TextInput
+                            style={[styles.input, errors.name && touched.name && styles.inputError]}
+                            value={name}
+                            onChangeText={v => { setName(v); setErrors(e => ({ ...e, name: '' })); }}
+                            onBlur={() => setTouched(t => ({ ...t, name: true }))}
+                            placeholder="e.g., Passport, Sony Headphones…"
+                            placeholderTextColor={TEXT_HNT}
+                            maxLength={100}
+                        />
+                        {errors.name && touched.name ? <Text style={styles.errorText}>⚠ {errors.name}</Text> : null}
                     </View>
-                    {errors.roomId && (
-                        <Text style={styles.errorText}>{errors.roomId}</Text>
-                    )}
+
+                    <View style={styles.cardDivider} />
+
+                    {/* Room */}
+                    <View style={[styles.fieldGroup, { zIndex: 100 }]}>
+                        <FieldLabel label="Room" />
+                        <InlineDropdown
+                            options={roomOptions}
+                            selectedId={roomId}
+                            onSelect={id => { setRoomId(id); setErrors(e => ({ ...e, roomId: '' })); }}
+                            placeholder="Select Room"
+                            zIndex={100}
+                            hasError={!!(errors.roomId && touched.roomId)}
+                        />
+                        {errors.roomId && touched.roomId ? <Text style={styles.errorText}>⚠ {errors.roomId}</Text> : null}
+                    </View>
+
+                    <View style={styles.cardDivider} />
+
+                    {/* Category */}
+                    <View style={[styles.fieldGroup, { zIndex: 90 }]}>
+                        <FieldLabel label="Category" optional />
+                        <InlineDropdown
+                            options={catOptions}
+                            selectedId={categoryId}
+                            onSelect={setCategoryId}
+                            placeholder="Select a category (optional)"
+                            accentColor={DEFAULT_CATEGORIES.find(c => c.id === categoryId)?.color ?? BLUE}
+                            zIndex={90}
+                        />
+                        {categoryId ? (
+                            <TouchableOpacity onPress={() => setCategoryId('')} style={styles.clearBtn}>
+                                <Text style={styles.clearBtnText}>✕ Clear category</Text>
+                            </TouchableOpacity>
+                        ) : null}
+                    </View>
                 </View>
 
-                {/* Specific Location Input */}
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Specific Location *</Text>
-                    <TextInput
-                        style={[
-                            styles.input,
-                            styles.textArea,
-                            errors.specificLocation && styles.inputError,
-                        ]}
-                        value={specificLocation}
-                        onChangeText={setSpecificLocation}
-                        placeholder="e.g., Top shelf, left side"
-                        placeholderTextColor="#999"
-                        multiline
-                        numberOfLines={3}
-                        maxLength={200}
-                    />
-                    {errors.specificLocation && (
-                        <Text style={styles.errorText}>{errors.specificLocation}</Text>
-                    )}
+                {/* ── Card: Specific Location ── */}
+                <View style={styles.formCard}>
+                    <View style={styles.fieldGroup}>
+                        <FieldLabel label="Specific Location" />
+                        <TextInput
+                            style={[styles.input, styles.textArea, errors.specificLocation && touched.specificLocation && styles.inputError]}
+                            value={specificLocation}
+                            onChangeText={v => { setSpecificLocation(v); setErrors(e => ({ ...e, specificLocation: '' })); }}
+                            onBlur={() => setTouched(t => ({ ...t, specificLocation: true }))}
+                            placeholder="e.g., Top drawer of desk, Behind the TV…"
+                            placeholderTextColor={TEXT_HNT}
+                            multiline
+                            numberOfLines={3}
+                            maxLength={200}
+                            textAlignVertical="top"
+                        />
+                        {errors.specificLocation && touched.specificLocation ? <Text style={styles.errorText}>⚠ {errors.specificLocation}</Text> : null}
+
+                        {/* Character count */}
+                        <Text style={styles.charCount}>{specificLocation.length}/200</Text>
+                    </View>
                 </View>
 
-                {/* Image Section */}
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Photo *</Text>
+                {/* ── Card: Photo ── */}
+                <View style={styles.formCard}>
+                    <FieldLabel label="Photo" />
 
                     {imageUri ? (
-                        <View style={styles.imagePreviewContainer}>
-                            <Image
-                                source={{ uri: imageUri }}
-                                style={styles.imagePreview}
-                            />
-                            <TouchableOpacity
-                                style={styles.removeImageButton}
-                                onPress={() => setImageUri('')}
-                            >
-                                <Text style={styles.removeImageText}>✕</Text>
-                            </TouchableOpacity>
+                        <View style={styles.imgPreviewWrap}>
+                            <Image source={{ uri: imageUri }} style={styles.imgPreview} />
+                            <View style={styles.imgOverlay}>
+                                <TouchableOpacity style={styles.imgOverlayBtn} onPress={handlePickImage}>
+                                    <Text style={styles.imgOverlayIcon}>🔄</Text>
+                                    <Text style={styles.imgOverlayText}>Change</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={[styles.imgOverlayBtn, { backgroundColor: ERROR + 'CC' }]} onPress={() => setImageUri('')}>
+                                    <Text style={styles.imgOverlayIcon}>🗑️</Text>
+                                    <Text style={styles.imgOverlayText}>Remove</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     ) : (
-                        <View style={styles.imageButtons}>
-                            <TouchableOpacity
-                                style={styles.imageButton}
-                                onPress={handleTakePhoto}
-                            >
-                                <Text style={styles.imageButtonIcon}>📷</Text>
-                                <Text style={styles.imageButtonText}>Take Photo</Text>
+                        <View style={styles.photoBtns}>
+                            <TouchableOpacity style={styles.photoBtn} onPress={handleTakePhoto} activeOpacity={0.75}>
+                                <View style={styles.photoBtnIconWrap}>
+                                    <Text style={styles.photoBtnEmoji}>📷</Text>
+                                </View>
+                                <Text style={styles.photoBtnLabel}>Take Photo</Text>
+                                <Text style={styles.photoBtnSub}>Use camera</Text>
                             </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={styles.imageButton}
-                                onPress={handlePickImage}
-                            >
-                                <Text style={styles.imageButtonIcon}>🖼️</Text>
-                                <Text style={styles.imageButtonText}>Choose Photo</Text>
+                            <TouchableOpacity style={styles.photoBtn} onPress={handlePickImage} activeOpacity={0.75}>
+                                <View style={styles.photoBtnIconWrap}>
+                                    <Text style={styles.photoBtnEmoji}>🖼️</Text>
+                                </View>
+                                <Text style={styles.photoBtnLabel}>Library</Text>
+                                <Text style={styles.photoBtnSub}>Choose file</Text>
                             </TouchableOpacity>
                         </View>
                     )}
 
-                    {errors.imageUri && (
-                        <Text style={styles.errorText}>{errors.imageUri}</Text>
-                    )}
+                    {errors.imageUri && touched.imageUri ? <Text style={[styles.errorText, { marginTop: 8 }]}>⚠ {errors.imageUri}</Text> : null}
                 </View>
+
+                {/* ── Tip banner ── */}
+                {!imageUri && (
+                    <View style={styles.tipCard}>
+                        <Text style={styles.tipIcon}>💡</Text>
+                        <Text style={styles.tipText}>
+                            A photo of the exact spot makes it much easier to find later — even months from now!
+                        </Text>
+                    </View>
+                )}
+
+                {/* ── Summary preview (when all fields filled) ── */}
+                {isFormComplete && (
+                    <View style={styles.summaryCard}>
+                        <Text style={styles.summaryTitle}>✅ Ready to save</Text>
+                        <Text style={styles.summaryText}>
+                            <Text style={{ fontWeight: '700', color: TEXT_PRI }}>{name}</Text>
+                            {' will be saved in '}
+                            <Text style={{ fontWeight: '700', color: TEXT_PRI }}>
+                                {roomStore.rooms.find(r => r.id === roomId)?.name}
+                            </Text>
+                            {' → '}
+                            <Text style={{ fontWeight: '700', color: TEXT_PRI }}>{specificLocation}</Text>
+                        </Text>
+                    </View>
+                )}
+
+                <View style={{ height: 120 }} />
             </ScrollView>
 
-            {/* Action Buttons */}
-            <View style={styles.actionButtons}>
+            {/* ── Footer ── */}
+            <View style={styles.footer}>
                 <TouchableOpacity
-                    style={[styles.button, styles.cancelButton]}
-                    onPress={handleCancel}
-                    disabled={saving}
-                >
-                    <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[styles.button, styles.saveButton]}
+                    style={[styles.saveBtn, (!isFormComplete || saving) && styles.saveBtnDisabled]}
                     onPress={handleSave}
-                    disabled={saving}
+                    disabled={saving || !isFormComplete}
+                    activeOpacity={0.85}
                 >
                     {saving ? (
                         <ActivityIndicator color="#fff" />
                     ) : (
-                        <Text style={styles.saveButtonText}>Save Item</Text>
+                        <>
+                            <Text style={styles.saveBtnIcon}>💾</Text>
+                            <Text style={styles.saveBtnText}>Save Item</Text>
+                        </>
                     )}
                 </TouchableOpacity>
+                <TouchableOpacity style={styles.cancelLink} onPress={() => navigation.goBack()} disabled={saving}>
+                    <Text style={styles.cancelLinkText}>Cancel</Text>
+                </TouchableOpacity>
             </View>
-        </View>
+        </SafeAreaView>
     );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#f8f9fa',
-    },
-    scrollView: {
-        flex: 1,
-    },
-    scrollContent: {
-        padding: 16,
-    },
-    formGroup: {
-        marginBottom: 24,
-    },
-    label: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#333',
-        marginBottom: 8,
-    },
-    input: {
-        backgroundColor: '#fff',
-        borderWidth: 1,
-        borderColor: '#ddd',
-        borderRadius: 8,
-        padding: 12,
-        fontSize: 16,
-        color: '#333',
-    },
-    inputError: {
-        borderColor: '#ff4444',
-    },
-    textArea: {
-        minHeight: 80,
-        textAlignVertical: 'top',
-    },
-    errorText: {
-        color: '#ff4444',
-        fontSize: 14,
-        marginTop: 4,
-    },
-    pickerContainer: {
-        backgroundColor: '#fff',
-        borderWidth: 1,
-        borderColor: '#ddd',
-        borderRadius: 8,
-        padding: 8,
-    },
-    roomList: {
-        paddingHorizontal: 4,
-    },
-    roomOption: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        borderWidth: 2,
-        borderColor: '#ddd',
-        marginHorizontal: 4,
-        backgroundColor: '#fff',
-    },
-    roomOptionSelected: {
-        backgroundColor: '#f0f9ff',
-    },
-    roomOptionText: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: '#333',
-    },
-    imageButtons: {
-        flexDirection: 'row',
-        gap: 12,
-    },
-    imageButton: {
-        flex: 1,
-        backgroundColor: '#fff',
-        borderWidth: 2,
-        borderColor: '#4ECDC4',
-        borderRadius: 8,
-        borderStyle: 'dashed',
-        padding: 24,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    imageButtonIcon: {
-        fontSize: 32,
-        marginBottom: 8,
-    },
-    imageButtonText: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: '#4ECDC4',
-    },
-    imagePreviewContainer: {
-        position: 'relative',
-        alignSelf: 'center',
-    },
-    imagePreview: {
-        width: 200,
-        height: 200,
-        borderRadius: 8,
-    },
-    removeImageButton: {
-        position: 'absolute',
-        top: -8,
-        right: -8,
-        backgroundColor: '#ff4444',
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    removeImageText: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    actionButtons: {
-        flexDirection: 'row',
-        padding: 16,
-        gap: 12,
-        backgroundColor: '#fff',
-        borderTopWidth: 1,
-        borderTopColor: '#ddd',
-    },
-    button: {
-        flex: 1,
-        padding: 16,
-        borderRadius: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    cancelButton: {
-        backgroundColor: '#fff',
-        borderWidth: 1,
-        borderColor: '#ddd',
-    },
-    cancelButtonText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#666',
-    },
-    saveButton: {
-        backgroundColor: '#4ECDC4',
-    },
-    saveButtonText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#fff',
-    },
+    safeArea: { flex: 1, backgroundColor: '#fff' },
+
+    // Header
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 13, backgroundColor: '#fff', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER },
+    backBtn: { width: 34, height: 34, borderRadius: 10, backgroundColor: BG, justifyContent: 'center', alignItems: 'center' },
+    backArrow: { fontSize: 20, color: TEXT_PRI, fontWeight: '600' },
+    headerTitle: { fontSize: 17, fontWeight: '700', color: TEXT_PRI, letterSpacing: -0.3 },
+
+    // Scroll
+    scroll:        { flex: 1, backgroundColor: BG },
+    scrollContent: { padding: 16, gap: 12 },
+
+    // Hero
+    hero:         { paddingVertical: 8 },
+    heroTitle:    { fontSize: 24, fontWeight: '800', color: TEXT_PRI, letterSpacing: -0.5, marginBottom: 4 },
+    heroSubtitle: { fontSize: 14, color: BLUE, fontWeight: '500' },
+
+    // Form cards
+    formCard: { backgroundColor: CARD, borderRadius: 16, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2, gap: 4 },
+    fieldGroup: { gap: 0 },
+    cardDivider: { height: StyleSheet.hairlineWidth, backgroundColor: BORDER, marginVertical: 14 },
+
+    // Inputs
+    input:      { backgroundColor: BG, borderWidth: 1.5, borderColor: BORDER, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: TEXT_PRI },
+    inputError: { borderColor: ERROR },
+    textArea:   { minHeight: 88, paddingTop: 13 },
+    errorText:  { color: ERROR, fontSize: 12, marginTop: 5, fontWeight: '500' },
+    charCount:  { fontSize: 11, color: TEXT_HNT, textAlign: 'right', marginTop: 4 },
+
+    // Clear btn
+    clearBtn:     { marginTop: 6, alignSelf: 'flex-start' },
+    clearBtnText: { fontSize: 12, color: TEXT_SEC, fontWeight: '500' },
+
+    // Photo
+    photoBtns: { flexDirection: 'row', gap: 12 },
+    photoBtn: { flex: 1, backgroundColor: BG, borderWidth: 1.5, borderColor: TEAL, borderRadius: 14, borderStyle: 'dashed', paddingVertical: 18, alignItems: 'center', gap: 6 },
+    photoBtnIconWrap: { width: 48, height: 48, borderRadius: 14, backgroundColor: TEAL + '18', justifyContent: 'center', alignItems: 'center' },
+    photoBtnEmoji: { fontSize: 24 },
+    photoBtnLabel: { fontSize: 13, fontWeight: '700', color: TEXT_PRI },
+    photoBtnSub:   { fontSize: 11, color: TEXT_HNT },
+
+    // Image preview
+    imgPreviewWrap: { position: 'relative', borderRadius: 14, overflow: 'hidden', alignSelf: 'center' },
+    imgPreview:     { width: 200, height: 200, borderRadius: 14 },
+    imgOverlay:     { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', gap: 8, padding: 10, backgroundColor: 'rgba(0,0,0,0.35)' },
+    imgOverlayBtn:  { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 8, paddingVertical: 6 },
+    imgOverlayIcon: { fontSize: 14 },
+    imgOverlayText: { fontSize: 12, color: '#fff', fontWeight: '600' },
+
+    // Tip card
+    tipCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: BLUE + '0D', borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: BLUE + '25' },
+    tipIcon: { fontSize: 16 },
+    tipText: { flex: 1, fontSize: 13, color: BLUE, lineHeight: 19 },
+
+    // Summary
+    summaryCard: { backgroundColor: '#F0FFF4', borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: '#34C75940' },
+    summaryTitle: { fontSize: 13, fontWeight: '700', color: '#34C759', marginBottom: 4 },
+    summaryText:  { fontSize: 13, color: TEXT_SEC, lineHeight: 19 },
+
+    // Footer
+    footer: { backgroundColor: '#fff', paddingHorizontal: 20, paddingTop: 14, paddingBottom: Platform.OS === 'ios' ? 32 : 20, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: BORDER, shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 8, gap: 10 },
+    saveBtn:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: BLUE, borderRadius: 14, paddingVertical: 16, gap: 8, shadowColor: BLUE, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
+    saveBtnDisabled: { backgroundColor: '#B0B7C3', shadowOpacity: 0, elevation: 0 },
+    saveBtnIcon:     { fontSize: 18 },
+    saveBtnText:     { fontSize: 16, fontWeight: '700', color: '#fff', letterSpacing: -0.2 },
+    cancelLink:      { alignItems: 'center', paddingVertical: 6 },
+    cancelLinkText:  { fontSize: 15, color: TEXT_SEC, fontWeight: '500' },
 });

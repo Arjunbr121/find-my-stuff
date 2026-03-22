@@ -149,19 +149,27 @@ export function parseImportData(jsonString: string): ExportData {
             throw new ValidationError('Invalid rooms array');
         }
 
-        // Validate each room
+        // Validate each room (validators throw ValidationError on failure)
         for (const room of data.rooms) {
-            const validation = validateRoom(room);
-            if (!validation.isValid) {
-                throw new ValidationError(`Invalid room data: ${validation.errors.join(', ')}`);
+            try {
+                validateRoom(room);
+            } catch (e) {
+                if (e instanceof ValidationError) {
+                    throw new ValidationError(`Invalid room data: ${e.message}`);
+                }
+                throw e;
             }
         }
 
         // Validate each item
         for (const item of data.items) {
-            const validation = validateItem(item);
-            if (!validation.isValid) {
-                throw new ValidationError(`Invalid item data: ${validation.errors.join(', ')}`);
+            try {
+                validateItem(item);
+            } catch (e) {
+                if (e instanceof ValidationError) {
+                    throw new ValidationError(`Invalid item data: ${e.message}`);
+                }
+                throw e;
             }
         }
 

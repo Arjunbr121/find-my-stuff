@@ -26,6 +26,12 @@ export type RootStackParamList = {
     RoomDetail: {
         roomId: string;
     };
+    ClearInventory: undefined; 
+    ManageCategoriesScreen:undefined;
+    EditProfile: undefined;
+    ChangePassword: undefined;
+    About: undefined;
+    FAQ:   undefined;
 };
 
 /**

@@ -17,6 +17,12 @@ import {
 
 // Import navigation types
 import type { RootStackParamList, BottomTabParamList } from '../types/navigation';
+import ClearInventoryScreen from '../screens/ClearInventoryScreen';
+import ManageCategoriesScreen from '../screens/ManageCategoriesScreen';
+import EditProfileScreen from '../screens/EditProfileScreen';
+import ChangePasswordScreen from '../screens/ChangePasswordScreen';
+import AboutScreen from '../screens/AboutScreen';
+import FAQScreen from '../screens/FAQScreen';
 
 const Tab = createBottomTabNavigator<BottomTabParamList>();
 const Stack = createStackNavigator<RootStackParamList>();
@@ -76,7 +82,7 @@ function RootNavigator() {
     return (
         <Stack.Navigator
             screenOptions={{
-                headerShown: true,
+                headerShown: false,
                 headerStyle: {
                     backgroundColor: '#4ECDC4',
                 },
@@ -94,10 +100,6 @@ function RootNavigator() {
             <Stack.Screen
                 name="AddItem"
                 component={AddItemScreen}
-                options={{
-                    title: 'Add Item',
-                    presentation: 'modal'
-                }}
             />
             <Stack.Screen
                 name="ItemDetail"
@@ -117,6 +119,16 @@ function RootNavigator() {
                 component={RoomDetailScreen}
                 options={{ title: 'Room Details' }}
             />
+              <Stack.Screen
+                name="ClearInventory"
+                component={ClearInventoryScreen}
+                options={{ headerShown: false }}
+            />
+            <Stack.Screen name="ManageCategoriesScreen" component={ManageCategoriesScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="EditProfile"     component={EditProfileScreen}     options={{ headerShown: false }} />
+<Stack.Screen name="ChangePassword"  component={ChangePasswordScreen}  options={{ headerShown: false }} />
+<Stack.Screen name="About" component={AboutScreen} options={{ headerShown: false }} />
+<Stack.Screen name="FAQ"   component={FAQScreen}   options={{ headerShown: false }} />
         </Stack.Navigator>
     );
 }

@@ -88,9 +88,8 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
                         style={styles.image}
                         onLoadStart={() => setImageLoading(true)}
                         onLoadEnd={() => setImageLoading(false)}
-                        onError={() => {
+                        onError={() => {setImageError(true);
                             setImageLoading(false);
-                            setImageError(true);
                         }}
                     />
                 )}

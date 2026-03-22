@@ -8,84 +8,77 @@ import {
     ScrollView,
     Alert,
     ActivityIndicator,
+    Platform,
+    SafeAreaView,
+    StatusBar,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { AddRoomScreenNavigationProp } from '../types/navigation';
 import { ROOM_ICONS, ROOM_COLORS } from '../types/models';
 import { useRoomStore } from '../stores';
 
-/**
- * Icon mapping for room types
- */
+// ─── Colour tokens ────────────────────────────────────────────────────────────
+const BLUE       = '#007AFF';
+const BG         = '#F5F6FA';
+const CARD       = '#FFFFFF';
+const BORDER     = '#E8E8EE';
+const ERROR      = '#FF3B30';
+const TEXT_PRI   = '#1A1A2E';
+const TEXT_SEC   = '#6B7280';
+const TEXT_HINT  = '#B0B7C3';
+
+// ─── Icon map ─────────────────────────────────────────────────────────────────
 const ICON_MAP: Record<string, string> = {
-    kitchen: '🍳',
-    bedroom: '🛏️',
-    'living-room': '🛋️',
-    bathroom: '🚿',
-    garage: '🚗',
-    office: '💼',
-    hallway: '🚪',
-    closet: '👔',
-    basement: '⬇️',
-    attic: '⬆️',
-    storage: '📦',
-    outdoor: '🌳',
+    kitchen:      '🍳',
+    bedroom:      '🛏️',
+    'living-room':'🛋️',
+    bathroom:     '🚿',
+    garage:       '🚗',
+    office:       '💼',
+    hallway:      '🚪',
+    closet:       '👔',
+    basement:     '⬇️',
+    attic:        '⬆️',
+    storage:      '📦',
+    outdoor:      '🌳',
 };
 
-/**
- * AddRoomScreen - Form screen for adding new rooms
- * 
- * Features:
- * - Text input for room name
- * - Icon picker with predefined options
- * - Color picker with predefined colors
- * - Optional description field
- * - Form validation with error messages
- * - Save button with loading state
- * - Room name uniqueness validation
- */
+// Fallback if ROOM_ICONS isn't populated yet — show at least these
+const FALLBACK_ICONS = Object.keys(ICON_MAP);
+const FALLBACK_COLORS = [
+    '#007AFF', '#34C759', '#FF9500', '#FF3B30',
+    '#5856D6', '#636366', '#4ECDC4', '#FF6B9D',
+];
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function AddRoomScreen() {
     const navigation = useNavigation<AddRoomScreenNavigationProp>();
 
-    // Form state
-    const [name, setName] = useState('');
-    const [icon, setIcon] = useState<string>(ROOM_ICONS[0]);
-    const [color, setColor] = useState<string>(ROOM_COLORS[0]);
-    const [description, setDescription] = useState('');
-    const [saving, setSaving] = useState(false);
+    const icons  = (ROOM_ICONS?.length  ? ROOM_ICONS  : FALLBACK_ICONS)  as string[];
+    const colors = (ROOM_COLORS?.length ? ROOM_COLORS : FALLBACK_COLORS) as string[];
 
-    // Validation errors
-    const [errors, setErrors] = useState<{
-        name?: string;
-        description?: string;
-    }>({});
+    const [name,        setName]        = useState('');
+    const [icon,        setIcon]        = useState<string>(icons[0]);
+    const [color,       setColor]       = useState<string>(colors[0]);
+    const [description, setDescription] = useState('');
+    const [saving,      setSaving]      = useState(false);
+    const [touched,     setTouched]     = useState<Record<string, boolean>>({});
+    const [errors,      setErrors]      = useState<{ name?: string; description?: string }>({});
 
     const roomStore = useRoomStore();
 
-    // Validate form
     const validateForm = (): boolean => {
-        const newErrors: typeof errors = {};
-
-        if (!name.trim()) {
-            newErrors.name = 'Room name is required';
-        } else if (name.trim().length > 50) {
-            newErrors.name = 'Room name must be 50 characters or less';
-        }
-
-        if (description.trim().length > 200) {
-            newErrors.description = 'Description must be 200 characters or less';
-        }
-
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
+        const e: typeof errors = {};
+        if (!name.trim())                       e.name = 'Room name is required';
+        else if (name.trim().length > 50)       e.name = 'Max 50 characters';
+        if (description.trim().length > 200)    e.description = 'Max 200 characters';
+        setErrors(e);
+        return Object.keys(e).length === 0;
     };
 
-    // Handle save button press
     const handleSave = async () => {
-        if (!validateForm()) {
-            return;
-        }
-
+        setTouched({ name: true, description: true });
+        if (!validateForm()) return;
         setSaving(true);
         try {
             await roomStore.addRoom({
@@ -94,323 +87,394 @@ export default function AddRoomScreen() {
                 color,
                 description: description.trim() || undefined,
             });
-
-            // Navigate back on success
             navigation.goBack();
         } catch (error: any) {
-            // Check for uniqueness error
             if (error.message?.includes('unique') || error.message?.includes('exists')) {
                 setErrors({ name: 'A room with this name already exists' });
             } else {
-                Alert.alert(
-                    'Error',
-                    error.message || 'Failed to save room. Please try again.',
-                    [{ text: 'OK' }]
-                );
+                Alert.alert('Error', error.message || 'Failed to save room. Please try again.');
             }
         } finally {
             setSaving(false);
         }
     };
 
-    // Handle cancel button press
-    const handleCancel = () => {
-        navigation.goBack();
-    };
+    const selectedEmoji = ICON_MAP[icon] ?? '📍';
 
     return (
-        <View style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+            <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+
+            {/* ── Header ── */}
+            <View style={styles.header}>
+                <TouchableOpacity style={styles.closeBtn} onPress={() => navigation.goBack()}>
+                    <Text style={styles.closeIcon}>✕</Text>
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Add New Room</Text>
+                <TouchableOpacity onPress={() => navigation.goBack()}>
+                    <Text style={styles.cancelLink}>Cancel</Text>
+                </TouchableOpacity>
+            </View>
+
             <ScrollView
-                style={styles.scrollView}
+                style={styles.scroll}
                 contentContainerStyle={styles.scrollContent}
                 keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
             >
-                {/* Room Name Input */}
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Room Name *</Text>
-                    <TextInput
-                        style={[styles.input, errors.name && styles.inputError]}
-                        value={name}
-                        onChangeText={setName}
-                        placeholder="e.g., Master Bedroom"
-                        placeholderTextColor="#999"
-                        maxLength={50}
-                    />
-                    {errors.name && (
-                        <Text style={styles.errorText}>{errors.name}</Text>
-                    )}
+                {/* ── Icon preview banner ── */}
+                <View style={[styles.previewBanner, { backgroundColor: color + '22' }]}>
+                    <View style={[styles.previewIconCircle, { backgroundColor: color + '33' }]}>
+                        <Text style={styles.previewEmoji}>{selectedEmoji}</Text>
+                    </View>
+                    {name.trim() ? (
+                        <Text style={[styles.previewRoomName, { color }]}>{name.trim()}</Text>
+                    ) : null}
                 </View>
 
-                {/* Icon Picker */}
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Icon *</Text>
+                {/* ── Room Details ── */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Room Details</Text>
+
+                    {/* Name */}
+                    <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Room Name</Text>
+                        <TextInput
+                            style={[styles.input, errors.name && touched.name && styles.inputError]}
+                            value={name}
+                            onChangeText={v => { setName(v); if (errors.name) setErrors(e => ({ ...e, name: undefined })); }}
+                            onBlur={() => setTouched(t => ({ ...t, name: true }))}
+                            placeholder="e.g., Attic, Basement, Shed"
+                            placeholderTextColor={TEXT_HINT}
+                            maxLength={50}
+                        />
+                        {errors.name && touched.name && (
+                            <Text style={styles.errorText}>⚠ {errors.name}</Text>
+                        )}
+                    </View>
+
+                    {/* Description */}
+                    <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Description (Optional)</Text>
+                        <TextInput
+                            style={[
+                                styles.input,
+                                styles.textArea,
+                                errors.description && touched.description && styles.inputError,
+                            ]}
+                            value={description}
+                            onChangeText={v => { setDescription(v); if (errors.description) setErrors(e => ({ ...e, description: undefined })); }}
+                            onBlur={() => setTouched(t => ({ ...t, description: true }))}
+                            placeholder="Briefly describe what's stored here"
+                            placeholderTextColor={TEXT_HINT}
+                            multiline
+                            numberOfLines={3}
+                            maxLength={200}
+                            textAlignVertical="top"
+                        />
+                        {errors.description && touched.description && (
+                            <Text style={styles.errorText}>⚠ {errors.description}</Text>
+                        )}
+                    </View>
+                </View>
+
+                {/* ── Visual Identity ── */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Visual Identity</Text>
+
+                    {/* Icon grid */}
                     <View style={styles.iconGrid}>
-                        {ROOM_ICONS.map((iconKey) => (
-                            <TouchableOpacity
-                                key={iconKey}
-                                style={[
-                                    styles.iconOption,
-                                    icon === iconKey && styles.iconOptionSelected,
-                                ]}
-                                onPress={() => setIcon(iconKey)}
-                            >
-                                <Text style={styles.iconEmoji}>
-                                    {ICON_MAP[iconKey] || '📍'}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
+                        {icons.map(iconKey => {
+                            const isSelected = icon === iconKey;
+                            return (
+                                <TouchableOpacity
+                                    key={iconKey}
+                                    style={[
+                                        styles.iconOption,
+                                        isSelected && { backgroundColor: color, borderColor: color },
+                                    ]}
+                                    onPress={() => setIcon(iconKey)}
+                                    activeOpacity={0.75}
+                                >
+                                    <Text style={styles.iconEmoji}>
+                                        {ICON_MAP[iconKey] ?? '📍'}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+
+                    {/* Color swatches */}
+                    <View style={styles.colorRow}>
+                        {colors.map(c => {
+                            const isSelected = color === c;
+                            return (
+                                <TouchableOpacity
+                                    key={c}
+                                    style={[
+                                        styles.colorSwatch,
+                                        { backgroundColor: c },
+                                        isSelected && styles.colorSwatchSelected,
+                                    ]}
+                                    onPress={() => setColor(c)}
+                                    activeOpacity={0.8}
+                                >
+                                    {isSelected && (
+                                        <Text style={styles.colorCheck}>✓</Text>
+                                    )}
+                                </TouchableOpacity>
+                            );
+                        })}
                     </View>
                 </View>
 
-                {/* Color Picker */}
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Color *</Text>
-                    <View style={styles.colorGrid}>
-                        {ROOM_COLORS.map((colorOption) => (
-                            <TouchableOpacity
-                                key={colorOption}
-                                style={[
-                                    styles.colorOption,
-                                    { backgroundColor: colorOption },
-                                    color === colorOption && styles.colorOptionSelected,
-                                ]}
-                                onPress={() => setColor(colorOption)}
-                            >
-                                {color === colorOption && (
-                                    <Text style={styles.checkmark}>✓</Text>
-                                )}
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                </View>
-
-                {/* Description Input (Optional) */}
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Description (Optional)</Text>
-                    <TextInput
-                        style={[
-                            styles.input,
-                            styles.textArea,
-                            errors.description && styles.inputError,
-                        ]}
-                        value={description}
-                        onChangeText={setDescription}
-                        placeholder="e.g., Main bedroom on second floor"
-                        placeholderTextColor="#999"
-                        multiline
-                        numberOfLines={3}
-                        maxLength={200}
-                    />
-                    {errors.description && (
-                        <Text style={styles.errorText}>{errors.description}</Text>
-                    )}
-                </View>
-
-                {/* Preview */}
-                <View style={styles.previewSection}>
-                    <Text style={styles.label}>Preview</Text>
-                    <View style={[styles.preview, { borderLeftColor: color }]}>
-                        <View style={[styles.previewIcon, { backgroundColor: color + '20' }]}>
-                            <Text style={styles.previewIconEmoji}>
-                                {ICON_MAP[icon] || '📍'}
-                            </Text>
-                        </View>
-                        <View style={styles.previewContent}>
-                            <Text style={styles.previewName}>
-                                {name.trim() || 'Room Name'}
-                            </Text>
-                            {description.trim() && (
-                                <Text style={styles.previewDescription}>
-                                    {description.trim()}
-                                </Text>
-                            )}
-                        </View>
-                    </View>
-                </View>
+                {/* spacer for footer */}
+                <View style={{ height: 110 }} />
             </ScrollView>
 
-            {/* Action Buttons */}
-            <View style={styles.actionButtons}>
+            {/* ── Footer ── */}
+            <View style={styles.footer}>
                 <TouchableOpacity
-                    style={[styles.button, styles.cancelButton]}
-                    onPress={handleCancel}
-                    disabled={saving}
-                >
-                    <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[styles.button, styles.saveButton]}
+                    style={[styles.createBtn, { backgroundColor: color }, saving && styles.createBtnDisabled]}
                     onPress={handleSave}
                     disabled={saving}
+                    activeOpacity={0.85}
                 >
                     {saving ? (
                         <ActivityIndicator color="#fff" />
                     ) : (
-                        <Text style={styles.saveButtonText}>Save Room</Text>
+                        <>
+                            <Text style={styles.createBtnIcon}>＋</Text>
+                            <Text style={styles.createBtnText}>Create Room</Text>
+                        </>
                     )}
                 </TouchableOpacity>
             </View>
-        </View>
+        </SafeAreaView>
     );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-    container: {
+    safeArea: {
         flex: 1,
-        backgroundColor: '#f8f9fa',
+        backgroundColor: '#fff',
     },
-    scrollView: {
+
+    // Header
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 13,
+        backgroundColor: '#fff',
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: BORDER,
+    },
+    closeBtn: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: BG,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    closeIcon: {
+        fontSize: 14,
+        color: TEXT_SEC,
+        fontWeight: '600',
+    },
+    headerTitle: {
+        fontSize: 17,
+        fontWeight: '700',
+        color: TEXT_PRI,
+        letterSpacing: -0.3,
+    },
+    cancelLink: {
+        fontSize: 15,
+        color: BLUE,
+        fontWeight: '500',
+    },
+
+    // Scroll
+    scroll: {
         flex: 1,
+        backgroundColor: BG,
     },
     scrollContent: {
-        padding: 16,
+        paddingBottom: 24,
     },
-    formGroup: {
-        marginBottom: 24,
+
+    // Preview banner
+    previewBanner: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 36,
+        marginBottom: 4,
+        gap: 10,
     },
-    label: {
+    previewIconCircle: {
+        width: 80,
+        height: 80,
+        borderRadius: 24,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    previewEmoji: {
+        fontSize: 40,
+    },
+    previewRoomName: {
         fontSize: 16,
+        fontWeight: '700',
+        letterSpacing: -0.2,
+    },
+
+    // Sections
+    section: {
+        backgroundColor: CARD,
+        marginHorizontal: 16,
+        marginTop: 16,
+        borderRadius: 16,
+        padding: 18,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+        elevation: 2,
+    },
+    sectionTitle: {
+        fontSize: 17,
+        fontWeight: '700',
+        color: TEXT_PRI,
+        letterSpacing: -0.3,
+        marginBottom: 16,
+    },
+
+    // Fields
+    fieldGroup: {
+        marginBottom: 16,
+    },
+    fieldLabel: {
+        fontSize: 12,
         fontWeight: '600',
-        color: '#333',
+        color: TEXT_SEC,
+        letterSpacing: 0.4,
+        textTransform: 'uppercase',
         marginBottom: 8,
     },
     input: {
-        backgroundColor: '#fff',
-        borderWidth: 1,
-        borderColor: '#ddd',
-        borderRadius: 8,
-        padding: 12,
-        fontSize: 16,
-        color: '#333',
+        backgroundColor: BG,
+        borderWidth: 1.5,
+        borderColor: BORDER,
+        borderRadius: 10,
+        paddingHorizontal: 14,
+        paddingVertical: 13,
+        fontSize: 15,
+        color: TEXT_PRI,
     },
     inputError: {
-        borderColor: '#ff4444',
+        borderColor: ERROR,
     },
     textArea: {
         minHeight: 80,
-        textAlignVertical: 'top',
+        paddingTop: 13,
     },
     errorText: {
-        color: '#ff4444',
-        fontSize: 14,
-        marginTop: 4,
+        color: ERROR,
+        fontSize: 12,
+        marginTop: 5,
+        fontWeight: '500',
     },
+
+    // Icon grid
     iconGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 12,
+        gap: 10,
+        marginBottom: 20,
     },
     iconOption: {
-        width: 60,
-        height: 60,
-        backgroundColor: '#fff',
+        width: 58,
+        height: 58,
+        borderRadius: 14,
         borderWidth: 2,
-        borderColor: '#ddd',
-        borderRadius: 12,
+        borderColor: BORDER,
+        backgroundColor: BG,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    iconOptionSelected: {
-        borderColor: '#4ECDC4',
-        backgroundColor: '#f0f9ff',
-    },
     iconEmoji: {
-        fontSize: 32,
+        fontSize: 26,
     },
-    colorGrid: {
+
+    // Color swatches
+    colorRow: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 12,
     },
-    colorOption: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+    colorSwatch: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         justifyContent: 'center',
         alignItems: 'center',
+        borderWidth: 0,
+    },
+    colorSwatchSelected: {
         borderWidth: 3,
-        borderColor: 'transparent',
+        borderColor: TEXT_PRI,
     },
-    colorOptionSelected: {
-        borderColor: '#333',
-    },
-    checkmark: {
-        fontSize: 24,
+    colorCheck: {
+        fontSize: 16,
         color: '#fff',
-        fontWeight: 'bold',
+        fontWeight: '800',
     },
-    previewSection: {
-        marginTop: 8,
-    },
-    preview: {
-        flexDirection: 'row',
+
+    // Footer
+    footer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
         backgroundColor: '#fff',
-        borderRadius: 12,
-        padding: 16,
-        borderLeftWidth: 4,
+        paddingHorizontal: 20,
+        paddingTop: 14,
+        paddingBottom: Platform.OS === 'ios' ? 32 : 20,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: BORDER,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
+        shadowOffset: { width: 0, height: -3 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        elevation: 8,
     },
-    previewIcon: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 12,
-    },
-    previewIconEmoji: {
-        fontSize: 28,
-    },
-    previewContent: {
-        flex: 1,
-        justifyContent: 'center',
-    },
-    previewName: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#333',
-        marginBottom: 4,
-    },
-    previewDescription: {
-        fontSize: 13,
-        color: '#666',
-    },
-    actionButtons: {
+    createBtn: {
         flexDirection: 'row',
-        padding: 16,
-        gap: 12,
-        backgroundColor: '#fff',
-        borderTopWidth: 1,
-        borderTopColor: '#ddd',
-    },
-    button: {
-        flex: 1,
-        padding: 16,
-        borderRadius: 8,
         alignItems: 'center',
         justifyContent: 'center',
+        borderRadius: 14,
+        paddingVertical: 16,
+        gap: 8,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 6,
     },
-    cancelButton: {
-        backgroundColor: '#fff',
-        borderWidth: 1,
-        borderColor: '#ddd',
+    createBtnDisabled: {
+        opacity: 0.6,
     },
-    cancelButtonText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#666',
-    },
-    saveButton: {
-        backgroundColor: '#4ECDC4',
-    },
-    saveButtonText: {
-        fontSize: 16,
-        fontWeight: '600',
+    createBtnIcon: {
+        fontSize: 20,
         color: '#fff',
+        fontWeight: '300',
+        lineHeight: 22,
+    },
+    createBtnText: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#fff',
+        letterSpacing: -0.2,
     },
 });
