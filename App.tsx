@@ -5,10 +5,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import 'react-native-get-random-values';
+import * as SecureStore from 'expo-secure-store';
 
 // Storage and repositories
 import { initializeStorage, IStorage } from './src/storage';
@@ -28,66 +28,50 @@ import { ErrorBoundary } from './src/components/ErrorBoundary';
 // Database recovery
 import { checkAndRecoverDatabase } from './src/utils/databaseRecovery';
 
-// Global storage instance (will be initialized on app start)
-let storageInstance: IStorage | null = null;
+// Lock screen
+import LockScreen from './src/screens/LockScreen';
 
-// Global store instances
+// ─── SecureStore keys ─────────────────────────────────────────────────────────
+const KEY_LOCK     = 'app_lock_enabled';
+const KEY_PASSWORD = 'app_password';
+
+// ─── Global singletons ────────────────────────────────────────────────────────
+let storageInstance:   IStorage | null = null;
 let itemStoreInstance: ReturnType<typeof createItemStore> | null = null;
 let roomStoreInstance: ReturnType<typeof createRoomStore> | null = null;
 
-/**
- * Get storage instance (singleton)
- */
 export function getStorage(): IStorage {
-  if (!storageInstance) {
-    throw new Error('Storage not initialized. Call initializeApp() first.');
-  }
+  if (!storageInstance) throw new Error('Storage not initialized.');
   return storageInstance;
 }
 
-/**
- * Get item store instance (singleton)
- */
 export function useItemStore() {
-  if (!itemStoreInstance) {
-    throw new Error('Item store not initialized. Call initializeApp() first.');
-  }
+  if (!itemStoreInstance) throw new Error('Item store not initialized.');
   return itemStoreInstance();
 }
 
-/**
- * Get room store instance (singleton)
- */
 export function useRoomStore() {
-  if (!roomStoreInstance) {
-    throw new Error('Room store not initialized. Call initializeApp() first.');
-  }
+  if (!roomStoreInstance) throw new Error('Room store not initialized.');
   return roomStoreInstance();
 }
 
+// ─── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
   const [isReady, setIsReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error,   setError]   = useState<string | null>(null);
+  const [locked,  setLocked]  = useState(false); // ← lock gate
 
   useEffect(() => {
     initializeApp();
   }, []);
 
-  /**
-   * Initialize app
-   * 1. Initialize storage
-   * 2. Check database health and recover if needed
-   * 3. Create repositories
-   * 4. Create stores
-   * 5. Load initial data
-   */
   async function initializeApp() {
     try {
       // Step 1: Initialize storage
       console.log('Initializing storage...');
       storageInstance = await initializeStorage();
 
-      // Step 2: Check database health and recover if corrupted
+      // Step 2: Check database health
       console.log('Checking database health...');
       const isHealthy = await checkAndRecoverDatabase(storageInstance);
       if (!isHealthy) {
@@ -99,16 +83,12 @@ export default function App() {
       const itemRepository = createItemRepository(storageInstance);
       const roomRepository = createRoomRepository(storageInstance);
 
-      // Step 4: Create stores with circular dependencies
+      // Step 4: Create stores
       console.log('Creating stores...');
-
-      // Create room store first (items depend on rooms for search)
       roomStoreInstance = createRoomStore(
         roomRepository,
         () => itemStoreInstance?.getState().items || []
       );
-
-      // Create item store (depends on rooms for search)
       itemStoreInstance = createItemStore(
         itemRepository,
         () => roomStoreInstance?.getState().rooms || []
@@ -119,6 +99,14 @@ export default function App() {
       await roomStoreInstance.getState().loadRooms();
       await itemStoreInstance.getState().loadItems();
 
+      // Step 6: Check if app lock is enabled
+      console.log('Checking lock state...');
+      const lockEnabled = await SecureStore.getItemAsync(KEY_LOCK);
+      const hasPassword = await SecureStore.getItemAsync(KEY_PASSWORD);
+      if (lockEnabled === 'true' && hasPassword) {
+        setLocked(true); // show lock screen before app
+      }
+
       console.log('App initialized successfully');
       setIsReady(true);
     } catch (err) {
@@ -127,20 +115,25 @@ export default function App() {
     }
   }
 
-  // Show loading screen while initializing
+  // ── Loading ──────────────────────────────────────────────────────────────
   if (!isReady && !error) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4ECDC4" />
-        <Text style={styles.loadingText}>Loading Find My Stuff...</Text>
+        <View style={styles.loadingIconWrap}>
+          <Text style={styles.loadingIcon}>📋</Text>
+        </View>
+        <ActivityIndicator size="large" color="#007AFF" style={{ marginTop: 24 }} />
+        <Text style={styles.loadingTitle}>Find My Stuff</Text>
+        <Text style={styles.loadingText}>Setting things up…</Text>
       </View>
     );
   }
 
-  // Show error screen if initialization failed
+  // ── Error ────────────────────────────────────────────────────────────────
   if (error) {
     return (
       <View style={styles.errorContainer}>
+        <Text style={styles.errorEmoji}>⚠️</Text>
         <Text style={styles.errorTitle}>Failed to Start</Text>
         <Text style={styles.errorMessage}>{error}</Text>
         <Text style={styles.errorHint}>
@@ -150,53 +143,59 @@ export default function App() {
     );
   }
 
-  // App is ready, show navigation
+  // ── Lock screen ──────────────────────────────────────────────────────────
+  // Shown BEFORE the main app if lock is enabled
+  if (locked) {
+    return (
+      <SafeAreaProvider>
+          <LockScreen onUnlock={() => setLocked(false)} />
+      </SafeAreaProvider>
+    );
+  }
+
+  // ── Main app ─────────────────────────────────────────────────────────────
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
-                <Navigation />
-                <StatusBar style="auto" />
-            </SafeAreaView>
+        <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
+          <Navigation />
+          <StatusBar style="auto" />
+        </SafeAreaView>
       </SafeAreaProvider>
     </ErrorBoundary>
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
+  // Loading
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#F5F6FA',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
   },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#666',
+  loadingIconWrap: {
+    width: 80, height: 80, borderRadius: 22,
+    backgroundColor: '#007AFF15',
+    justifyContent: 'center', alignItems: 'center',
   },
+  loadingIcon:  { fontSize: 40 },
+  loadingTitle: { fontSize: 20, fontWeight: '800', color: '#1A1A2E', letterSpacing: -0.4, marginTop: 8 },
+  loadingText:  { fontSize: 14, color: '#6B7280' },
+
+  // Error
   errorContainer: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#F5F6FA',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    padding: 32,
+    gap: 10,
   },
-  errorTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FF3B30',
-    marginBottom: 12,
-  },
-  errorMessage: {
-    fontSize: 16,
-    color: '#333',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  errorHint: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-  },
+  errorEmoji:   { fontSize: 48, marginBottom: 8 },
+  errorTitle:   { fontSize: 22, fontWeight: '800', color: '#FF3B30', letterSpacing: -0.3 },
+  errorMessage: { fontSize: 15, color: '#333', textAlign: 'center' },
+  errorHint:    { fontSize: 13, color: '#6B7280', textAlign: 'center', lineHeight: 20 },
 });
