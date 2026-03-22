@@ -3,7 +3,7 @@
  * Helpers for checking storage availability and managing storage space
  */
 
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { StorageError } from './validation';
 
 /**

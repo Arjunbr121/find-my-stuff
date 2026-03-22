@@ -5,7 +5,7 @@
  * Thumbnails are used in list views to reduce memory usage and improve scrolling performance.
  */
 
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { generateUUID } from './uuid';
 

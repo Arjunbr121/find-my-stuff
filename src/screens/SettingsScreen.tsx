@@ -13,8 +13,7 @@ import {
     Alert,
     ActivityIndicator,
 } from 'react-native';
-import { useItemStore } from '../stores/itemStore';
-import { useRoomStore } from '../stores/roomStore';
+import { useItemStore, useRoomStore } from '../stores';
 import { storage } from '../storage';
 import {
     exportToFile,

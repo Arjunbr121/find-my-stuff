@@ -12,8 +12,7 @@ import type { RootNavigationProp } from '../types/navigation';
 import { SearchBar } from '../components/SearchBar';
 import { ItemCard } from '../components/ItemCard';
 import { FloatingButton } from '../components/FloatingButton';
-import { createItemStore } from '../stores/itemStore';
-import { createRoomStore } from '../stores/roomStore';
+import { useItemStore, useRoomStore } from '../stores';
 
 /**
  * HomeScreen - Main screen displaying all items with search functionality
@@ -31,9 +30,8 @@ export default function HomeScreen() {
     const [searchQuery, setSearchQuery] = useState('');
     const [refreshing, setRefreshing] = useState(false);
 
-    // Get stores (placeholder - will be properly wired in App.tsx)
-    const itemStore = createItemStore();
-    const roomStore = createRoomStore();
+    const itemStore = useItemStore();
+    const roomStore = useRoomStore();
 
     // Load items on mount
     useEffect(() => {
@@ -46,7 +44,7 @@ export default function HomeScreen() {
         if (itemStore.hasMore && !itemStore.loading) {
             itemStore.loadMoreItems();
         }
-    }, [itemStore]);
+    }, [itemStore.hasMore, itemStore.loading, itemStore.loadMoreItems]);
 
     // Filter items based on search query
     const filteredItems = useMemo(() => {
@@ -133,7 +131,7 @@ export default function HomeScreen() {
 
     // Render footer loading indicator
     const renderFooter = useCallback(() => {
-        if (!itemStore.loading || itemStore.items.length === 0) return null;
+        if (!itemStore?.loading || itemStore?.items?.length === 0) return null;
 
         return (
             <View style={styles.footerLoader}>
@@ -141,7 +139,7 @@ export default function HomeScreen() {
                 <Text style={styles.footerText}>Loading more items...</Text>
             </View>
         );
-    }, [itemStore.loading, itemStore.items.length]);
+    }, [itemStore?.loading, itemStore?.items?.length]);
 
     return (
         <View style={styles.container}>

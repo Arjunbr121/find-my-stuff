@@ -3,7 +3,9 @@
  * Business logic layer for item operations
  */
 
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { Item } from '../types/models';
 import { ItemRepository } from '../types/repositories';
 import { IStorage } from '../types/storage';
@@ -24,6 +26,34 @@ import { generateThumbnail, deleteThumbnail } from '../utils/imageOptimization';
 function getFileExtension(uri: string): string {
     const match = uri.match(/\.([^./?#]+)(?:[?#]|$)/);
     return match ? match[1] : 'jpg';
+}
+
+/**
+ * Read a remote/blob/file URI into a base64 data URL for IndexedDB persistence on web.
+ */
+async function uriToDataUri(uri: string): Promise<string> {
+    const trimmed = uri.trim();
+    if (trimmed.startsWith('data:')) {
+        return trimmed;
+    }
+    const response = await fetch(trimmed);
+    if (!response.ok) {
+        throw new StorageError(`Failed to read image (${response.status})`);
+    }
+    const blob = await response.blob();
+    return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const result = reader.result;
+            if (typeof result === 'string') {
+                resolve(result);
+            } else {
+                reject(new StorageError('Failed to encode image'));
+            }
+        };
+        reader.onerror = () => reject(reader.error ?? new Error('FileReader failed'));
+        reader.readAsDataURL(blob);
+    });
 }
 
 /**
@@ -65,7 +95,7 @@ export class ItemRepositoryImpl implements ItemRepository {
         if (!room) {
             // Clean up image and thumbnail if room doesn't exist
             await this.deleteImage(permanentImageUri).catch(() => { });
-            if (thumbnailUri) {
+            if (thumbnailUri && !thumbnailUri.startsWith('data:')) {
                 await deleteThumbnail(thumbnailUri).catch(() => { });
             }
             throw new ValidationError(`Room with id "${item.roomId}" does not exist`);
@@ -78,7 +108,7 @@ export class ItemRepositoryImpl implements ItemRepository {
         } catch (error) {
             // Clean up image and thumbnail if storage fails
             await this.deleteImage(permanentImageUri).catch(() => { });
-            if (thumbnailUri) {
+            if (thumbnailUri && !thumbnailUri.startsWith('data:')) {
                 await deleteThumbnail(thumbnailUri).catch(() => { });
             }
             throw error;
@@ -251,10 +281,37 @@ export class ItemRepositoryImpl implements ItemRepository {
      * @throws FileNotFoundError if source doesn't exist
      * @throws StorageError if insufficient space or copy fails
      */
+    /**
+     * Web: blob/content URIs are not on-device files; copy them to data URLs for IndexedDB.
+     */
+    private async saveImageWeb(uri: string): Promise<{ imageUri: string; thumbnailUri: string }> {
+        const imageUri = await uriToDataUri(uri);
+        let thumbnailUri = '';
+        try {
+            const manipResult = await manipulateAsync(
+                imageUri,
+                [{ resize: { width: 200, height: 200 } }],
+                { compress: 0.7, format: SaveFormat.JPEG }
+            );
+            thumbnailUri = await uriToDataUri(manipResult.uri);
+        } catch (error) {
+            console.warn('Failed to generate thumbnail on web:', error);
+        }
+        return { imageUri, thumbnailUri };
+    }
+
     async saveImage(uri: string): Promise<{ imageUri: string; thumbnailUri: string }> {
         // Step 1: Validate source URI
         if (!uri || uri.trim().length === 0) {
             throw new ValidationError('Invalid source URI');
+        }
+
+        if (Platform.OS === 'web') {
+            return this.saveImageWeb(uri);
+        }
+
+        if (!FileSystem.documentDirectory) {
+            throw new StorageError('App document directory is not available');
         }
 
         // If URI is already in our permanent directory, check if thumbnail exists
@@ -340,6 +397,10 @@ export class ItemRepositoryImpl implements ItemRepository {
     async deleteImage(uri: string): Promise<void> {
         if (!uri || uri.trim().length === 0) {
             return; // Nothing to delete
+        }
+
+        if (uri.trim().startsWith('data:')) {
+            return;
         }
 
         // Check if file exists

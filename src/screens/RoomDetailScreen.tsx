@@ -18,8 +18,7 @@ import type {
     RootNavigationProp,
 } from '../types/navigation';
 import { ItemCard } from '../components/ItemCard';
-import { createRoomStore } from '../stores/roomStore';
-import { createItemStore } from '../stores/itemStore';
+import { useItemStore, useRoomStore } from '../stores';
 
 /**
  * Icon mapping for room types
@@ -59,9 +58,8 @@ export default function RoomDetailScreen() {
 
     const [deleting, setDeleting] = useState(false);
 
-    // Get stores (placeholder - will be properly wired in App.tsx)
-    const roomStore = createRoomStore();
-    const itemStore = createItemStore();
+    const roomStore = useRoomStore();
+    const itemStore = useItemStore();
 
     // Load data on mount
     useEffect(() => {

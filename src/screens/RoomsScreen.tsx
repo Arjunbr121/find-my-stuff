@@ -10,8 +10,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { RootNavigationProp } from '../types/navigation';
 import { RoomCard } from '../components/RoomCard';
 import { FloatingButton } from '../components/FloatingButton';
-import { createRoomStore } from '../stores/roomStore';
-import { createItemStore } from '../stores/itemStore';
+import { useItemStore, useRoomStore } from '../stores';
 
 /**
  * RoomsScreen - Displays all rooms in a grid layout
@@ -27,9 +26,8 @@ import { createItemStore } from '../stores/itemStore';
 export default function RoomsScreen() {
     const navigation = useNavigation<RootNavigationProp>();
 
-    // Get stores (placeholder - will be properly wired in App.tsx)
-    const roomStore = createRoomStore();
-    const itemStore = createItemStore();
+    const roomStore = useRoomStore();
+    const itemStore = useItemStore();
 
     // Load data on mount
     useEffect(() => {

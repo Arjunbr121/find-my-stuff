@@ -15,8 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { Camera } from 'expo-camera';
 import type { AddItemScreenNavigationProp } from '../types/navigation';
-import { createItemStore } from '../stores/itemStore';
-import { createRoomStore } from '../stores/roomStore';
+import { useItemStore, useRoomStore } from '../stores';
 import { ensureCameraPermission, ensureMediaLibraryPermission } from '../utils/permissions';
 
 /**
@@ -51,9 +50,8 @@ export default function AddItemScreen() {
         imageUri?: string;
     }>({});
 
-    // Get stores (placeholder - will be properly wired in App.tsx)
-    const itemStore = createItemStore();
-    const roomStore = createRoomStore();
+    const itemStore = useItemStore();
+    const roomStore = useRoomStore();
 
     // Load rooms on mount
     useEffect(() => {
@@ -100,7 +98,7 @@ export default function AddItemScreen() {
         try {
             // Launch camera
             const result = await ImagePicker.launchCameraAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                mediaTypes: ['images'],
                 allowsEditing: true,
                 aspect: [1, 1],
                 quality: 0.8,
@@ -135,7 +133,7 @@ export default function AddItemScreen() {
         try {
             // Launch image picker
             const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                mediaTypes: ['images'],
                 allowsEditing: true,
                 aspect: [1, 1],
                 quality: 0.8,

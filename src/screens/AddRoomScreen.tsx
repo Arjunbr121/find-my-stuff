@@ -12,7 +12,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import type { AddRoomScreenNavigationProp } from '../types/navigation';
 import { ROOM_ICONS, ROOM_COLORS } from '../types/models';
-import { createRoomStore } from '../stores/roomStore';
+import { useRoomStore } from '../stores';
 
 /**
  * Icon mapping for room types
@@ -60,8 +60,7 @@ export default function AddRoomScreen() {
         description?: string;
     }>({});
 
-    // Get store (placeholder - will be properly wired in App.tsx)
-    const roomStore = createRoomStore();
+    const roomStore = useRoomStore();
 
     // Validate form
     const validateForm = (): boolean => {

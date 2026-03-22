@@ -16,8 +16,7 @@ import type {
     ItemDetailScreenNavigationProp,
     ItemDetailScreenRouteProp,
 } from '../types/navigation';
-import { createItemStore } from '../stores/itemStore';
-import { createRoomStore } from '../stores/roomStore';
+import { useItemStore, useRoomStore } from '../stores';
 
 /**
  * ItemDetailScreen - Displays full details of a single item
@@ -38,9 +37,8 @@ export default function ItemDetailScreen() {
 
     const [deleting, setDeleting] = useState(false);
 
-    // Get stores (placeholder - will be properly wired in App.tsx)
-    const itemStore = createItemStore();
-    const roomStore = createRoomStore();
+    const itemStore = useItemStore();
+    const roomStore = useRoomStore();
 
     // Load data on mount
     useEffect(() => {

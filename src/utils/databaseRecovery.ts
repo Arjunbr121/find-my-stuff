@@ -5,7 +5,7 @@
 
 import { Alert } from 'react-native';
 import { IStorage } from '../types/storage';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 /**
  * Check database health and attempt recovery if needed
