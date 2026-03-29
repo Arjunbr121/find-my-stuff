@@ -2,14 +2,19 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, StyleSheet,
     ScrollView, Image, Alert, ActivityIndicator, Platform,
-    Animated, SafeAreaView, StatusBar,
+    Animated, SafeAreaView, StatusBar, Linking,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import type { AddItemScreenNavigationProp } from '../types/navigation';
 import { useItemStore, useRoomStore } from '../stores';
 import { ensureCameraPermission, ensureMediaLibraryPermission } from '../utils/permissions';
 import type { Category } from './ManageCategoriesScreen';
+import type { ItemLocation } from '../types/models';
+import ScreenWrapper from '../components/ScreenWrapper';
+import { detectObjects, buildLocationSummary, type DetectedObject } from '../utils/objectDetection';
+import DetectionWebView, { type DetectionWebViewHandle } from '../components/DetectionWebView';
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
 const BLUE     = '#007AFF';
@@ -192,11 +197,17 @@ const stepS = StyleSheet.create({
 export default function AddItemScreen() {
     const navigation = useNavigation<AddItemScreenNavigationProp>();
 
+    const detectionRef = useRef<DetectionWebViewHandle>(null);
+
     const [name,             setName]             = useState('');
     const [roomId,           setRoomId]           = useState('');
     const [categoryId,       setCategoryId]       = useState('');
     const [specificLocation, setSpecificLocation] = useState('');
     const [imageUri,         setImageUri]         = useState('');
+    const [capturedLocation, setCapturedLocation] = useState<ItemLocation | null>(null);
+    const [detecting,        setDetecting]        = useState(false);
+    const [detectedObjects,  setDetectedObjects]  = useState<DetectedObject[]>([]);
+    const [aiSummary,        setAiSummary]        = useState<string>('');
     const [saving,           setSaving]           = useState(false);
     const [touched,          setTouched]          = useState<Record<string, boolean>>({});
     const [errors,           setErrors]           = useState<Record<string, string>>({});
@@ -220,12 +231,47 @@ export default function AddItemScreen() {
         return Object.keys(e).length === 0;
     };
 
+    const captureLocation = async (): Promise<ItemLocation | null> => {
+        if (Platform.OS === 'web') {
+            // Use browser Geolocation API on web
+            return new Promise((resolve) => {
+                if (!navigator.geolocation) { resolve(null); return; }
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => resolve({
+                        latitude:  pos.coords.latitude,
+                        longitude: pos.coords.longitude,
+                        accuracy:  pos.coords.accuracy ?? undefined,
+                    }),
+                    () => resolve(null),
+                    { timeout: 8000 }
+                );
+            });
+        }
+        try {
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') return null;
+            const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            return {
+                latitude:  pos.coords.latitude,
+                longitude: pos.coords.longitude,
+                accuracy:  pos.coords.accuracy ?? undefined,
+            };
+        } catch {
+            return null;
+        }
+    };
+
     const handleTakePhoto = async () => {
         const ok = await ensureCameraPermission(handlePickImage);
         if (!ok) return;
         try {
             const r = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.8 });
-            if (!r.canceled && r.assets?.length) { setImageUri(r.assets[0].uri); setErrors(e => ({ ...e, imageUri: '' })); }
+            if (!r.canceled && r.assets?.length) {
+                setImageUri(r.assets[0].uri);
+                setErrors(e => ({ ...e, imageUri: '' }));
+                const loc = await captureLocation();
+                setCapturedLocation(loc);
+            }
         } catch { Alert.alert('Camera Error', 'Failed to take photo. Please try again.'); }
     };
 
@@ -234,8 +280,45 @@ export default function AddItemScreen() {
         if (!ok) return;
         try {
             const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.8 });
-            if (!r.canceled && r.assets?.length) { setImageUri(r.assets[0].uri); setErrors(e => ({ ...e, imageUri: '' })); }
+            if (!r.canceled && r.assets?.length) {
+                setImageUri(r.assets[0].uri);
+                setErrors(e => ({ ...e, imageUri: '' }));
+                const loc = await captureLocation();
+                setCapturedLocation(loc);
+            }
         } catch { Alert.alert('Image Picker Error', 'Failed to select photo.'); }
+    };
+
+    const handleDetect = async () => {
+        if (!imageUri) return;
+        if (!detectionRef.current?.isReady()) {
+            Alert.alert('Not ready', 'Detection engine is still loading. Please wait a moment and try again.');
+            return;
+        }
+        setDetecting(true);
+        setDetectedObjects([]);
+        setAiSummary('');
+        try {
+            // Convert URI to base64 data URI for the WebView
+            let dataUri = imageUri;
+            if (!imageUri.startsWith('data:')) {
+                const { manipulateAsync, SaveFormat } = await import('expo-image-manipulator');
+                const resized = await manipulateAsync(imageUri, [{ resize: { width: 300 } }], {
+                    compress: 0.7, format: SaveFormat.JPEG, base64: true,
+                });
+                dataUri = `data:image/jpeg;base64,${resized.base64}`;
+            }
+
+            const results = await detectionRef.current.detect(dataUri);
+            setDetectedObjects(results);
+            const room = roomStore.rooms.find(r => r.id === roomId);
+            const summary = buildLocationSummary(results, room?.name ?? 'the room', specificLocation || 'this location');
+            setAiSummary(summary);
+        } catch (e: any) {
+            Alert.alert('Detection Failed', e?.message ?? 'Could not analyse image.');
+        } finally {
+            setDetecting(false);
+        }
     };
 
     const handleSave = async () => {
@@ -247,6 +330,9 @@ export default function AddItemScreen() {
                 name: name.trim(), roomId,
                 categoryId: categoryId || undefined,
                 specificLocation: specificLocation.trim(), imageUri,
+                location: capturedLocation ?? undefined,
+                detectedObjects: detectedObjects.length ? detectedObjects.map(d => d.label) : undefined,
+                aiSummary: aiSummary || undefined,
             } as any);
             navigation.goBack();
         } catch (err: any) {
@@ -267,8 +353,10 @@ export default function AddItemScreen() {
     const isFormComplete = name.trim() && roomId && specificLocation.trim() && imageUri;
 
     return (
-        <SafeAreaView style={styles.safeArea}>
+        <ScreenWrapper style={{ backgroundColor: '#fff' }}>
             <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+            {/* Hidden detection engine — loads TF.js + COCO-SSD in background */}
+            <DetectionWebView ref={detectionRef} />
 
             {/* ── Header ── */}
             <View style={styles.header}>
@@ -383,7 +471,7 @@ export default function AddItemScreen() {
                                     <Text style={styles.imgOverlayIcon}>🔄</Text>
                                     <Text style={styles.imgOverlayText}>Change</Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity style={[styles.imgOverlayBtn, { backgroundColor: ERROR + 'CC' }]} onPress={() => setImageUri('')}>
+                                <TouchableOpacity style={[styles.imgOverlayBtn, { backgroundColor: ERROR + 'CC' }]} onPress={() => { setImageUri(''); setCapturedLocation(null); }}>
                                     <Text style={styles.imgOverlayIcon}>🗑️</Text>
                                     <Text style={styles.imgOverlayText}>Remove</Text>
                                 </TouchableOpacity>
@@ -409,6 +497,107 @@ export default function AddItemScreen() {
                     )}
 
                     {errors.imageUri && touched.imageUri ? <Text style={[styles.errorText, { marginTop: 8 }]}>⚠ {errors.imageUri}</Text> : null}
+
+                    {/* ── Location capture row ── */}
+                    <View style={styles.locationRow}>
+                        {capturedLocation ? (
+                            /* Location captured — show coords + tap to open maps */
+                            <TouchableOpacity
+                                style={styles.locationCaptured}
+                                activeOpacity={0.75}
+                                onPress={() => {
+                                    const { latitude, longitude } = capturedLocation;
+                                    const url = Platform.select({
+                                        ios:     `maps://maps.apple.com/?ll=${latitude},${longitude}`,
+                                        android: `geo:${latitude},${longitude}?q=${latitude},${longitude}`,
+                                        default: `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`,
+                                    })!;
+                                    Linking.openURL(url);
+                                }}
+                            >
+                                <Text style={styles.locationCapturedIcon}>📍</Text>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.locationCapturedTitle}>Location pinned  ·  tap to preview</Text>
+                                    <Text style={styles.locationCapturedCoords}>
+                                        {capturedLocation.latitude.toFixed(5)}, {capturedLocation.longitude.toFixed(5)}
+                                        {capturedLocation.accuracy ? `  ±${Math.round(capturedLocation.accuracy)}m` : ''}
+                                    </Text>
+                                </View>
+                                <TouchableOpacity onPress={() => setCapturedLocation(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                                    <Text style={styles.locationClearBtn}>✕</Text>
+                                </TouchableOpacity>
+                            </TouchableOpacity>
+                        ) : (
+                            /* No location yet — show pin button */
+                            <TouchableOpacity
+                                style={styles.locationPinBtn}
+                                activeOpacity={0.8}
+                                onPress={async () => {
+                                    const loc = await captureLocation();
+                                    if (loc) {
+                                        setCapturedLocation(loc);
+                                    } else {
+                                        Alert.alert(
+                                            'Location unavailable',
+                                            'Could not get your location. Make sure location permission is granted in Settings.',
+                                        );
+                                    }
+                                }}
+                            >
+                                <Text style={styles.locationPinIcon}>📍</Text>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.locationPinTitle}>Pin My Location</Text>
+                                    <Text style={styles.locationPinSub}>Save GPS so you can navigate back later</Text>
+                                </View>
+                                <Text style={styles.locationPinChevron}>›</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    {/* ── AI Detect button ── */}
+                    {imageUri && (
+                        <TouchableOpacity
+                            style={[styles.detectBtn, detecting && styles.detectBtnDisabled]}
+                            onPress={handleDetect}
+                            disabled={detecting}
+                            activeOpacity={0.8}
+                        >
+                            {detecting ? (
+                                <>
+                                    <ActivityIndicator size="small" color={TEAL} />
+                                    <Text style={styles.detectBtnText}>Analysing…</Text>
+                                </>
+                            ) : (
+                                <>
+                                    <Text style={styles.detectBtnIcon}>🔍</Text>
+                                    <Text style={styles.detectBtnText}>
+                                        {detectedObjects.length ? 'Re-analyse Photo' : 'Detect Objects in Photo'}
+                                    </Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    )}
+
+                    {/* ── Detection results ── */}
+                    {detectedObjects.length > 0 && (
+                        <View style={styles.detectionResults}>
+                            <Text style={styles.detectionTitle}>🧠 Detected nearby</Text>
+                            <View style={styles.detectionTags}>
+                                {detectedObjects.map((obj, i) => (
+                                    <View key={i} style={styles.detectionTag}>
+                                        <Text style={styles.detectionTagText}>
+                                            {obj.label}  {Math.round(obj.score * 100)}%
+                                        </Text>
+                                    </View>
+                                ))}
+                            </View>
+                            {aiSummary ? (
+                                <View style={styles.aiSummaryBox}>
+                                    <Text style={styles.aiSummaryText}>💬 {aiSummary}</Text>
+                                </View>
+                            ) : null}
+                        </View>
+                    )}
                 </View>
 
                 {/* ── Tip banner ── */}
@@ -461,7 +650,7 @@ export default function AddItemScreen() {
                     <Text style={styles.cancelLinkText}>Cancel</Text>
                 </TouchableOpacity>
             </View>
-        </SafeAreaView>
+        </ScreenWrapper>
     );
 }
 
@@ -525,6 +714,34 @@ const styles = StyleSheet.create({
     summaryCard: { backgroundColor: '#F0FFF4', borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: '#34C75940' },
     summaryTitle: { fontSize: 13, fontWeight: '700', color: '#34C759', marginBottom: 4 },
     summaryText:  { fontSize: 13, color: TEXT_SEC, lineHeight: 19 },
+
+    // Location
+    locationRow:             { marginTop: 12 },
+    locationPinBtn:          { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5, borderColor: BORDER, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: BG },
+    locationPinIcon:         { fontSize: 18 },
+    locationPinTitle:        { fontSize: 13, fontWeight: '600', color: TEXT_PRI },
+    locationPinSub:          { fontSize: 11, color: TEXT_HNT, marginTop: 1 },
+    locationPinChevron:      { fontSize: 20, color: TEXT_HNT },
+    locationCaptured:        { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5, borderColor: '#34C75960', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: '#F0FFF4' },
+    locationCapturedIcon:    { fontSize: 18 },
+    locationCapturedTitle:   { fontSize: 12, fontWeight: '700', color: '#34C759', marginBottom: 2 },
+    locationCapturedCoords:  { fontSize: 11, color: '#6B7280' },
+    locationClearBtn:        { fontSize: 14, color: '#B0B7C3', fontWeight: '600', paddingLeft: 4 },
+
+    // Detect button
+    detectBtn:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, paddingVertical: 11, borderRadius: 10, borderWidth: 1.5, borderColor: TEAL, backgroundColor: TEAL + '10' },
+    detectBtnDisabled: { opacity: 0.6 },
+    detectBtnIcon:     { fontSize: 15 },
+    detectBtnText:     { fontSize: 13, fontWeight: '700', color: TEAL },
+
+    // Detection results
+    detectionResults:  { marginTop: 12, backgroundColor: '#F0FFFE', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: TEAL + '40' },
+    detectionTitle:    { fontSize: 12, fontWeight: '700', color: TEAL, marginBottom: 8 },
+    detectionTags:     { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    detectionTag:      { backgroundColor: TEAL + '18', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
+    detectionTagText:  { fontSize: 12, color: TEAL, fontWeight: '600' },
+    aiSummaryBox:      { marginTop: 10, backgroundColor: '#fff', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: TEAL + '30' },
+    aiSummaryText:     { fontSize: 12, color: '#444', lineHeight: 18 },
 
     // Footer
     footer: { backgroundColor: '#fff', paddingHorizontal: 20, paddingTop: 14, paddingBottom: Platform.OS === 'ios' ? 32 : 20, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: BORDER, shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 8, gap: 10 },

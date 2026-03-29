@@ -5,7 +5,7 @@ import {
     ActivityIndicator, Switch, Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import * as SecureStore from 'expo-secure-store';
+import SecureStore from '../utils/secureStorage';
 import * as LocalAuthentication from 'expo-local-authentication';
 import type { RootNavigationProp } from '../types/navigation';
 

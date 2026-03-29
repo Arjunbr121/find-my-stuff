@@ -12,6 +12,7 @@ import {
     StatusBar,
     Image,
     Animated,
+    Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { RootNavigationProp } from '../types/navigation';
@@ -19,6 +20,7 @@ import { SearchBar } from '../components/SearchBar';
 import { ItemCard } from '../components/ItemCard';
 import { useItemStore, useRoomStore } from '../stores';
 import { ICON_MAP } from '../components/RoomCard';
+import ScreenWrapper from '../components/ScreenWrapper';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type FilterType = 'all' | 'recent' | 'favorites';
@@ -358,7 +360,7 @@ export default function HomeScreen() {
 
     // ── Render ──────────────────────────────────────────────────────────────
     return (
-        <SafeAreaView style={styles.safeArea}>
+        <ScreenWrapper style={{ backgroundColor: '#fff' }}>
             <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
             <View style={styles.container}>
@@ -366,7 +368,7 @@ export default function HomeScreen() {
                 <View style={styles.header}>
                     <View style={styles.headerLeft}>
                         <View style={styles.appIconWrapper}>
-                            <Text style={styles.appIcon}>📋</Text>
+                            <Text style={styles.appIcon}>🗂️</Text>
                         </View>
                         <Text style={styles.appTitle}>Find My Stuff</Text>
                     </View>
@@ -405,7 +407,7 @@ export default function HomeScreen() {
                     }
                     maxToRenderPerBatch={10}
                     windowSize={5}
-                    removeClippedSubviews={true}
+                    removeClippedSubviews={Platform.OS !== 'web'}
                     initialNumToRender={10}
                     showsVerticalScrollIndicator={false}
                 />
@@ -419,7 +421,7 @@ export default function HomeScreen() {
                         <Text style={styles.fabInNavIcon}>+</Text>
                     </TouchableOpacity>
             </View>
-        </SafeAreaView>
+        </ScreenWrapper>
     );
 }
 

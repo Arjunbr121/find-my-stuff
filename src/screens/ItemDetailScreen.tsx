@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
     View, Text, Image, StyleSheet, ScrollView, TouchableOpacity,
     Alert, ActivityIndicator, Platform, SafeAreaView, StatusBar,
-    Share, Modal, TextInput, KeyboardAvoidingView, Animated, FlatList,
+    Share, Modal, TextInput, KeyboardAvoidingView, Animated, FlatList, Linking,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
@@ -630,20 +630,112 @@ export default function ItemDetailScreen() {
                                 <DetailRow icon="🔄" iconBg="#F5F0FF" label="Last Updated" value={formatDate(item.updatedAt)} />
                             </>
                         )}
+                        {item.location && (
+                            <>
+                                <View style={styles.rowDivider} />
+                                <DetailRow
+                                    icon="📍"
+                                    iconBg="#F0FFF4"
+                                    label="GPS Location"
+                                    value={`${item.location.latitude.toFixed(5)}, ${item.location.longitude.toFixed(5)}${item.location.accuracy ? `  ±${Math.round(item.location.accuracy)}m` : ''}`}
+                                />
+                            </>
+                        )}
                     </View>
 
-                    {/* Find it tip */}
-                    <View style={styles.tipCard}>
-                        <Text style={styles.tipIcon}>💡</Text>
-                        <View style={styles.tipContent}>
-                            <Text style={styles.tipTitle}>How to find it</Text>
-                            <Text style={styles.tipText}>
-                                Go to <Text style={{ fontWeight: '700', color: TEXT_PRI }}>{room.name}</Text>
-                                {' → '}
-                                <Text style={{ fontWeight: '700', color: TEXT_PRI }}>{item.specificLocation}</Text>
-                            </Text>
+                    {/* ── Find This Item section — always visible ── */}
+                    <View style={styles.findSection}>
+                        <Text style={styles.findSectionTitle}>📌  Find This Item</Text>
+
+                        {/* How to find it — always shown */}
+                        <View style={styles.findRow}>
+                            <View style={[styles.findRowIcon, { backgroundColor: room.color + '20' }]}>
+                                <Text style={{ fontSize: 20 }}>{roomEmoji}</Text>
+                            </View>
+                            <View style={styles.findRowContent}>
+                                <Text style={styles.findRowLabel}>Go to room</Text>
+                                <Text style={styles.findRowValue}>{room.name}</Text>
+                            </View>
                         </View>
+
+                        <View style={styles.findConnector} />
+
+                        <View style={styles.findRow}>
+                            <View style={[styles.findRowIcon, { backgroundColor: '#FFF0EF' }]}>
+                                <Text style={{ fontSize: 20 }}>📍</Text>
+                            </View>
+                            <View style={styles.findRowContent}>
+                                <Text style={styles.findRowLabel}>Look at</Text>
+                                <Text style={styles.findRowValue}>{item.specificLocation}</Text>
+                            </View>
+                        </View>
+
+                        {/* GPS / Maps row */}
+                        <View style={styles.findConnector} />
+
+                        {item.location ? (
+                            // Has GPS — show Open in Maps button
+                            <TouchableOpacity
+                                style={styles.mapsBtn}
+                                activeOpacity={0.8}
+                                onPress={() => {
+                                    const { latitude, longitude } = item.location!;
+                                    const label = encodeURIComponent(item.name);
+                                    const url = Platform.select({
+                                        ios:     `maps://maps.apple.com/?q=${label}&ll=${latitude},${longitude}`,
+                                        android: `geo:${latitude},${longitude}?q=${latitude},${longitude}(${label})`,
+                                        default: `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`,
+                                    })!;
+                                    Linking.canOpenURL(url).then(ok =>
+                                        Linking.openURL(ok ? url : `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`)
+                                    );
+                                }}
+                            >
+                                <View style={styles.mapsBtnIconWrap}>
+                                    <Text style={styles.mapsBtnIcon}>🗺️</Text>
+                                </View>
+                                <View style={styles.mapsBtnContent}>
+                                    <Text style={styles.mapsBtnTitle}>Navigate with Maps</Text>
+                                    <Text style={styles.mapsBtnSub}>
+                                        {item.location.latitude.toFixed(5)}, {item.location.longitude.toFixed(5)}
+                                        {item.location.accuracy ? `  ±${Math.round(item.location.accuracy)}m` : ''}
+                                    </Text>
+                                </View>
+                                <Text style={styles.mapsBtnChevron}>›</Text>
+                            </TouchableOpacity>
+                        ) : (
+                            // No GPS — explain how to add it
+                            <View style={styles.noGpsRow}>
+                                <View style={styles.mapsBtnIconWrap}>
+                                    <Text style={styles.mapsBtnIcon}>🌐</Text>
+                                </View>
+                                <View style={styles.mapsBtnContent}>
+                                    <Text style={styles.noGpsTitle}>No GPS saved</Text>
+                                    <Text style={styles.noGpsSub}>Edit this item and tap "Pin My Location" to enable navigation</Text>
+                                </View>
+                            </View>
+                        )}
                     </View>
+
+                    {/* AI summary */}
+                    {(item as any).aiSummary && (
+                        <View style={[styles.tipCard, { backgroundColor: '#F0FFFE', borderColor: '#4ECDC440' }]}>
+                            <Text style={styles.tipIcon}>🧠</Text>
+                            <View style={styles.tipContent}>
+                                <Text style={[styles.tipTitle, { color: '#4ECDC4' }]}>AI Summary</Text>
+                                <Text style={styles.tipText}>{(item as any).aiSummary}</Text>
+                                {(item as any).detectedObjects?.length > 0 && (
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
+                                        {(item as any).detectedObjects.map((label: string, i: number) => (
+                                            <View key={i} style={{ backgroundColor: '#4ECDC418', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 }}>
+                                                <Text style={{ fontSize: 11, color: '#4ECDC4', fontWeight: '600' }}>{label}</Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                )}
+                            </View>
+                        </View>
+                    )}
 
                     <View style={{ height: 100 }} />
                 </View>
@@ -719,6 +811,28 @@ const styles = StyleSheet.create({
     rowDivider: { height: StyleSheet.hairlineWidth, backgroundColor: BORDER, marginHorizontal: 16 },
 
     tipCard:    { flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: BLUE + '0D', borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: BLUE + '25' },
+
+    // Maps button
+    mapsBtn:         { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#34C75912', borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: '#34C75940' },
+    mapsBtnIconWrap: { width: 42, height: 42, borderRadius: 12, backgroundColor: '#34C75918', justifyContent: 'center', alignItems: 'center' },
+    mapsBtnIcon:     { fontSize: 22 },
+    mapsBtnContent:  { flex: 1 },
+    mapsBtnTitle:    { fontSize: 15, fontWeight: '700', color: '#34C759', marginBottom: 2 },
+    mapsBtnSub:      { fontSize: 11, color: '#6B7280' },
+    mapsBtnChevron:  { fontSize: 22, color: '#34C759', fontWeight: '300' },
+
+    // Find This Item section
+    findSection:      { backgroundColor: '#fff', borderRadius: 16, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 },
+    findSectionTitle: { fontSize: 13, fontWeight: '700', color: '#1A1A2E', letterSpacing: 0.2, marginBottom: 14 },
+    findRow:          { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    findRowIcon:      { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+    findRowContent:   { flex: 1 },
+    findRowLabel:     { fontSize: 11, fontWeight: '600', color: '#B0B7C3', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
+    findRowValue:     { fontSize: 15, fontWeight: '600', color: '#1A1A2E' },
+    findConnector:    { width: 2, height: 16, backgroundColor: '#E8E8EE', marginLeft: 21, marginVertical: 4 },
+    noGpsRow:         { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#F5F6FA', borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: '#E8E8EE' },
+    noGpsTitle:       { fontSize: 14, fontWeight: '600', color: '#6B7280', marginBottom: 2 },
+    noGpsSub:         { fontSize: 11, color: '#B0B7C3', lineHeight: 16 },
     tipIcon:    { fontSize: 20 },
     tipContent: { flex: 1 },
     tipTitle:   { fontSize: 13, fontWeight: '700', color: BLUE, marginBottom: 4 },

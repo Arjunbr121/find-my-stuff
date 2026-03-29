@@ -14,6 +14,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import type { RootNavigationProp } from '../types/navigation';
 import { useItemStore, useRoomStore } from '../stores';
+import ScreenWrapper from '../components/ScreenWrapper';
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
 const BLUE      = '#007AFF';
@@ -217,7 +218,7 @@ export default function RoomsScreen() {
     );
 
     return (
-        <SafeAreaView style={styles.safeArea}>
+        <ScreenWrapper style={{ backgroundColor: '#fff' }}>
             <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
             {/* ── Header ── */}
@@ -243,7 +244,7 @@ export default function RoomsScreen() {
                 showsVerticalScrollIndicator={false}
             />
 
-        </SafeAreaView>
+        </ScreenWrapper>
     );
 }
 

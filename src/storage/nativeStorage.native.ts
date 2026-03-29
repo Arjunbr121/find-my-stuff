@@ -51,12 +51,27 @@ export class NativeStorage implements IStorage {
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
           imageUri TEXT NOT NULL,
+          thumbnailUri TEXT,
           roomId TEXT NOT NULL,
           specificLocation TEXT NOT NULL,
+          location TEXT,
+          detectedObjects TEXT,
+          aiSummary TEXT,
           createdAt INTEGER NOT NULL,
           updatedAt INTEGER NOT NULL
         );
       `);
+
+            // Migrate existing tables — add columns if they don't exist yet
+            const migrations = [
+                `ALTER TABLE items ADD COLUMN thumbnailUri TEXT`,
+                `ALTER TABLE items ADD COLUMN location TEXT`,
+                `ALTER TABLE items ADD COLUMN detectedObjects TEXT`,
+                `ALTER TABLE items ADD COLUMN aiSummary TEXT`,
+            ];
+            for (const sql of migrations) {
+                try { await this.db.execAsync(sql); } catch { /* column already exists */ }
+            }
 
             // Create indexes for items
             await this.db.execAsync(`
@@ -106,8 +121,12 @@ export class NativeStorage implements IStorage {
             id: row.id,
             name: row.name,
             imageUri: row.imageUri,
+            thumbnailUri: row.thumbnailUri || undefined,
             roomId: row.roomId,
             specificLocation: row.specificLocation,
+            location: row.location ? JSON.parse(row.location) : undefined,
+            detectedObjects: row.detectedObjects ? JSON.parse(row.detectedObjects) : undefined,
+            aiSummary: row.aiSummary || undefined,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
         };
@@ -134,14 +153,18 @@ export class NativeStorage implements IStorage {
 
         try {
             await db.runAsync(
-                `INSERT INTO items (id, name, imageUri, roomId, specificLocation, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO items (id, name, imageUri, thumbnailUri, roomId, specificLocation, location, detectedObjects, aiSummary, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     item.id,
                     item.name,
                     item.imageUri,
+                    item.thumbnailUri ?? null,
                     item.roomId,
                     item.specificLocation,
+                    item.location ? JSON.stringify(item.location) : null,
+                    item.detectedObjects ? JSON.stringify(item.detectedObjects) : null,
+                    item.aiSummary ?? null,
                     item.createdAt,
                     item.updatedAt,
                 ]
@@ -186,6 +209,18 @@ export class NativeStorage implements IStorage {
             if (updates.specificLocation !== undefined) {
                 fields.push('specificLocation = ?');
                 values.push(updates.specificLocation);
+            }
+            if (updates.location !== undefined) {
+                fields.push('location = ?');
+                values.push(updates.location ? JSON.stringify(updates.location) : null);
+            }
+            if (updates.detectedObjects !== undefined) {
+                fields.push('detectedObjects = ?');
+                values.push(updates.detectedObjects ? JSON.stringify(updates.detectedObjects) : null);
+            }
+            if (updates.aiSummary !== undefined) {
+                fields.push('aiSummary = ?');
+                values.push(updates.aiSummary ?? null);
             }
             if (updates.updatedAt !== undefined) {
                 fields.push('updatedAt = ?');

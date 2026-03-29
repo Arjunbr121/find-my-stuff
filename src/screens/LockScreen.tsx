@@ -3,7 +3,7 @@ import {
     View, Text, TextInput, TouchableOpacity, StyleSheet,
     SafeAreaView, StatusBar, Animated, Platform, ActivityIndicator,
 } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
+import SecureStore from '../utils/secureStorage';
 import * as LocalAuthentication from 'expo-local-authentication';
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
@@ -111,7 +111,7 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
                 {/* App icon + title */}
                 <View style={styles.top}>
                     <View style={styles.appIconWrap}>
-                        <Text style={styles.appIconEmoji}>📋</Text>
+                        <Text style={styles.appIconEmoji}>🗂️</Text>
                     </View>
                     <Text style={styles.appName}>Find My Stuff</Text>
                     <Text style={styles.lockSubtitle}>Enter your password to continue</Text>

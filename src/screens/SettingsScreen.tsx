@@ -5,13 +5,14 @@ import {
     StatusBar, Platform, Linking, Image,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import * as SecureStore from 'expo-secure-store';
+import SecureStore from '../utils/secureStorage';
 import type { RootNavigationProp } from '../types/navigation';
 import { useItemStore, useRoomStore } from '../stores';
 import { storage } from '../storage';
 import { exportToFile, shareExportFile, pickImportFile, parseImportData, getImportPreview } from '../utils/exportImport';
 import { checkStorageSpace, formatBytes, getImageStorageUsage } from '../utils/storage';
 import type { UserProfile } from './EditProfileScreen';
+import ScreenWrapper from '../components/ScreenWrapper';
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
 const BLUE     = '#007AFF';
@@ -190,7 +191,7 @@ export const SettingsScreen: React.FC = () => {
         .slice(0, 2);
 
     return (
-        <SafeAreaView style={styles.safeArea}>
+        <ScreenWrapper style={{ backgroundColor: '#fff' }}>
             <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
             {/* ── Header ── */}
@@ -259,7 +260,7 @@ export const SettingsScreen: React.FC = () => {
                         iconBg="#EEF4FF"
                         label="Manage Categories"
                         sublabel="Add, edit or remove categories"
-                        onPress={() => navigation.navigate('ManageCategories' as any)}
+                        onPress={() => navigation.navigate('ManageCategoriesScreen' as any)}
                     />
                     <View style={styles.rowDivider} />
                     <SettingRow
@@ -447,10 +448,10 @@ export const SettingsScreen: React.FC = () => {
                 {/* ── Footer ── */}
                 <View style={styles.footer}>
                     <View style={styles.footerAppIcon}>
-                        <Text style={styles.footerAppEmoji}>📋</Text>
+                        <Text style={styles.footerAppEmoji}>🗂️</Text>
                     </View>
                     <Text style={styles.footerAppName}>Find My Stuff</Text>
-                    <Text style={styles.footerVersion}>Version 1.0.0 (2026)</Text>
+                    <Text style={styles.footerVersion}>Version 1.1.0 (2026)</Text>
                     <Text style={styles.footerTagline}>
                         Made with <Text style={{ color: ERROR }}>♥</Text> in Bengaluru, for organised homes 🇮🇳
                     </Text>
@@ -468,7 +469,7 @@ export const SettingsScreen: React.FC = () => {
                     </View>
                 </View>
             )}
-        </SafeAreaView>
+        </ScreenWrapper>
     );
 };
 

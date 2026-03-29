@@ -45,12 +45,12 @@ export default function AboutScreen() {
                 {/* Hero */}
                 <View style={styles.hero}>
                     <View style={styles.appIconWrap}>
-                        <Text style={styles.appIcon}>📋</Text>
+                        <Text style={styles.appIcon}>🗂️</Text>
                     </View>
                     <Text style={styles.appName}>Find My Stuff</Text>
                     <Text style={styles.appTagline}>Your personal home inventory, always at hand.</Text>
                     <View style={styles.versionBadge}>
-                        <Text style={styles.versionText}>Version 2.4.0 (2023)</Text>
+                        <Text style={styles.versionText}>Version 1.1.0 (2026)</Text>
                     </View>
                 </View>
 
@@ -92,11 +92,11 @@ export default function AboutScreen() {
                     <Text style={styles.sectionLabel}>APP INFO</Text>
                     <View style={styles.infoCard}>
                         {[
-                            { label: 'Version',    value: '2.4.0' },
-                            { label: 'Build',      value: '2023' },
-                            { label: 'Platform',   value: 'iOS & Android' },
-                            { label: 'Storage',    value: 'Local device only' },
-                            { label: 'Data policy',value: 'No data collected' },
+                            { label: 'Version',     value: '1.1.0' },
+                            { label: 'Build',       value: '2026' },
+                            { label: 'Platform',    value: 'Android' },
+                            { label: 'Storage',     value: 'Local device only' },
+                            { label: 'Data policy', value: 'No data collected' },
                         ].map(({ label, value }, idx, arr) => (
                             <View key={label}>
                                 <View style={styles.infoRow}>

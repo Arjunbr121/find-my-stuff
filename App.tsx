@@ -4,11 +4,11 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-get-random-values';
-import * as SecureStore from 'expo-secure-store';
+import SecureStore from './src/utils/secureStorage';
 
 // Storage and repositories
 import { initializeStorage, IStorage } from './src/storage';
@@ -27,6 +27,9 @@ import { ErrorBoundary } from './src/components/ErrorBoundary';
 
 // Database recovery
 import { checkAndRecoverDatabase } from './src/utils/databaseRecovery';
+
+// Default room seeding
+import { seedDefaultRooms } from './src/utils/seedRooms';
 
 // Lock screen
 import LockScreen from './src/screens/LockScreen';
@@ -94,7 +97,10 @@ export default function App() {
         () => roomStoreInstance?.getState().rooms || []
       );
 
-      // Step 5: Load initial data
+      // Step 5: Seed default rooms (first launch only)
+      console.log('Seeding default rooms...');
+      await seedDefaultRooms(roomRepository);
+      // Step 6: Load initial data
       console.log('Loading initial data...');
       await roomStoreInstance.getState().loadRooms();
       await itemStoreInstance.getState().loadItems();
@@ -120,7 +126,7 @@ export default function App() {
     return (
       <View style={styles.loadingContainer}>
         <View style={styles.loadingIconWrap}>
-          <Text style={styles.loadingIcon}>📋</Text>
+          <Text style={styles.loadingIcon}>🗂️</Text>
         </View>
         <ActivityIndicator size="large" color="#007AFF" style={{ marginTop: 24 }} />
         <Text style={styles.loadingTitle}>Find My Stuff</Text>
@@ -157,10 +163,17 @@ export default function App() {
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
-        <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
-          <Navigation />
-          <StatusBar style="auto" />
-        </SafeAreaView>
+        {Platform.OS === 'web' ? (
+          <View style={{ flex: 1, display: 'flex' as any, flexDirection: 'column', height: '100vh' as any, overflow: 'hidden' as any }}>
+            <Navigation />
+            <StatusBar style="auto" />
+          </View>
+        ) : (
+          <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
+            <Navigation />
+            <StatusBar style="auto" />
+          </SafeAreaView>
+        )}
       </SafeAreaProvider>
     </ErrorBoundary>
   );

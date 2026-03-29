@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import * as SecureStore from 'expo-secure-store';
+import SecureStore from '../utils/secureStorage';
 import type { RootNavigationProp } from '../types/navigation';
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────

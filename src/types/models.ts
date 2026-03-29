@@ -15,6 +15,12 @@
  * - createdAt: Required, positive integer
  * - updatedAt: Required, positive integer, >= createdAt
  */
+export type ItemLocation = {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;        // metres
+};
+
 export type Item = {
     id: string;                // UUID v4
     name: string;              // User-provided item name
@@ -22,6 +28,9 @@ export type Item = {
     thumbnailUri?: string;     // Optional local file path to thumbnail (200x200)
     roomId: string;            // Foreign key to Room
     specificLocation: string;  // e.g., "Top shelf, left side"
+    location?: ItemLocation;   // GPS coords captured at photo time
+    detectedObjects?: string[]; // COCO-SSD labels e.g. ["laptop","bottle"]
+    aiSummary?: string;         // Human-readable location summary
     createdAt: number;         // Unix timestamp (ms)
     updatedAt: number;         // Unix timestamp (ms)
 };
